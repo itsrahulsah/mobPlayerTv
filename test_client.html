@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MobPlayer TV Test Client</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        .log-box { width: 100%; height: 300px; background: #f4f4f4; border: 1px solid #ccc; overflow-y: scroll; padding: 10px; font-family: monospace; }
+        .control-panel { margin-bottom: 20px; }
+        button, input { padding: 8px; margin-right: 5px; }
+    </style>
+</head>
+<body>
+    <h2>MobPlayer TV - WebSocket Test Client</h2>
+    <p>Status: <span id="status" style="color: red; font-weight: bold;">Disconnected</span></p>
+    
+    <div class="control-panel">
+        <button onclick="connect()">1. Connect to TV Server</button>
+        <button onclick="sendAuthRequest()">2. Request Auth</button>
+        <input type="text" id="pinInput" placeholder="Enter PIN from TV" />
+        <button onclick="sendPinSubmit()">3. Submit PIN</button>
+        <button onclick="sendPlayCommand()">4. Send PLAY</button>
+    </div>
+
+    <div class="log-box" id="logBox"></div>
+
+    <script>
+        let ws;
+        const logBox = document.getElementById('logBox');
+        const statusSpan = document.getElementById('status');
+
+        function log(message) {
+            logBox.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${message}</div>`;
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
+        function connect() {
+            if (ws) ws.close();
+            log("Attempting to connect to ws://localhost:8080/control...");
+            
+            ws = new WebSocket("ws://localhost:8080/control");
+            
+            ws.onopen = () => {
+                statusSpan.textContent = "Connected!";
+                statusSpan.style.color = "green";
+                log("<b>Connection established!</b> Server is running.");
+            };
+            
+            ws.onmessage = (event) => {
+                log(`<span style="color: blue;">Received:</span> ${event.data}`);
+            };
+            
+            ws.onclose = () => {
+                statusSpan.textContent = "Disconnected";
+                statusSpan.style.color = "red";
+                log("Connection closed.");
+            };
+            
+            ws.onerror = (error) => {
+                log(`<span style="color: red;">Error:</span> Failed to connect. Is the port forwarded? Run: adb forward tcp:8080 tcp:8080`);
+            };
+        }
+
+        function sendAuthRequest() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return log("Not connected.");
+            const msg = JSON.stringify({ type: "AUTH_REQUEST", payload: "no-token-yet" });
+            ws.send(msg);
+            log(`Sent: ${msg}`);
+        }
+
+        function sendPinSubmit() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return log("Not connected.");
+            const pin = document.getElementById('pinInput').value;
+            const msg = JSON.stringify({ type: "PIN_SUBMIT", payload: pin });
+            ws.send(msg);
+            log(`Sent: ${msg}`);
+        }
+
+        function sendPlayCommand() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return log("Not connected.");
+            const msg = JSON.stringify({ 
+                type: "COMMAND", 
+                payload: JSON.stringify({ action: "PLAY" }) 
+            });
+            ws.send(msg);
+            log(`Sent: ${msg}`);
+        }
+    </script>
+</body>
+</html>

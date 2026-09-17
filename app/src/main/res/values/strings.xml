@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">MobPlayer TV</string>
+    <string name="enter_pin">Enter this PIN on your device:</string>
+    <string name="device_connecting">%1$s is trying to connect.</string>
+    <string name="disconnect_prompt">Disconnect current controller?</string>
+    <string name="allow">Allow</string>
+    <string name="reject">Reject</string>
+</resources>
