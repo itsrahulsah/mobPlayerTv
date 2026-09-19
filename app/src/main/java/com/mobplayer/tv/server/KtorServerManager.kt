@@ -11,10 +11,16 @@ import com.mobplayer.tv.models.RemoteIconType
 import com.mobplayer.tv.models.WebSocketMessage
 import com.mobplayer.tv.network.NetworkUtils
 import com.mobplayer.tv.viewmodel.ServerEventBus
+import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
+import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.ApplicationEngine
 import io.ktor.server.engine.embeddedServer
+import io.ktor.server.response.header
+import io.ktor.server.response.respondText
+import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.pingPeriod
@@ -48,6 +54,9 @@ class KtorServerManager(private val context: Context) {
     fun startServer(port: Int = 8080) {
         if (server != null) return
 
+        val testClientHtml = context.assets.open("test_client.html")
+            .bufferedReader(Charsets.UTF_8).use { it.readText() }
+
         server = embeddedServer(CIO, port = port) {
             install(WebSockets) {
                 pingPeriod = Duration.ofSeconds(15)
@@ -57,6 +66,13 @@ class KtorServerManager(private val context: Context) {
             }
 
             routing {
+                listOf("/", "/test_client.html").forEach { path ->
+                    get(path) {
+                        call.response.header(HttpHeaders.CacheControl, "no-store")
+                        call.respondText(testClientHtml, ContentType.Text.Html)
+                    }
+                }
+
                 webSocket("/control") {
                     val clientInfo = this.call.request.local.let { "${it.remoteHost}:${it.serverPort}" }
                     Log.i("RemoteEvent", "==================================================")

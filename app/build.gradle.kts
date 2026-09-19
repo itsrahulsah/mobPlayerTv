@@ -5,6 +5,13 @@ plugins {
     // id("com.google.dagger.hilt.android") // We will apply this later when configuring dagger
 }
 
+// Keep the root test client as the single source, packaging only that file.
+val testClientAssets = layout.buildDirectory.dir("generated/testClientAssets")
+val syncTestClientAssets by tasks.registering(Sync::class) {
+    from(rootProject.file("test_client.html"))
+    into(testClientAssets)
+}
+
 android {
     namespace = "com.mobplayer.tv"
     compileSdk = 34
@@ -42,6 +49,11 @@ android {
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.8"
     }
+    sourceSets.getByName("main").assets.srcDir(testClientAssets)
+}
+
+tasks.named("preBuild") {
+    dependsOn(syncTestClientAssets)
 }
 
 dependencies {

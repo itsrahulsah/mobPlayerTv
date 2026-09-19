@@ -44,6 +44,14 @@ Clients discover MobPlayer TV devices on the local Wi-Fi network using standard 
 
 ## 3. WebSocket Endpoint
 
+The same server also serves the interactive browser test client at `GET /` and
+`GET /test_client.html`. Open `http://<TV_IP_ADDRESS>:8080/`, or the PC's forwarded
+HTTP address when using an emulator (for example, `http://<PC_LAN_IP>:18081/`).
+The page defaults its WebSocket host and port to the address used to open it.
+Click **Connect**, then submit the PIN displayed on the TV to test remote control.
+Serving the page does not require authentication; control commands still require
+the existing PIN/token authentication over `/control`.
+
 - **URL Protocol**: `ws://`
 - **Endpoint Path**: `/control`
 - **Full URL Format**: `ws://<TV_IP_ADDRESS>:8080/control`
