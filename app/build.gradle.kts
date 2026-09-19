@@ -50,13 +50,16 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     
-    // Compose for TV
+    // Compose for TV & UI
     implementation("androidx.compose.ui:ui:1.6.2")
     implementation("androidx.compose.ui:ui-graphics:1.6.2")
     implementation("androidx.compose.ui:ui-tooling-preview:1.6.2")
+    implementation("androidx.compose.material3:material3:1.2.1")
+    implementation("androidx.compose.material:material-icons-extended:1.6.2")
     implementation("androidx.tv:tv-foundation:1.0.0-alpha10")
     implementation("androidx.tv:tv-material:1.0.0-alpha10")
     implementation("androidx.activity:activity-compose:1.8.2")
+    implementation("io.coil-kt:coil-compose:2.6.0")
 
     // Ktor Server (WebSockets & Networking)
     val ktorVersion = "2.3.9"

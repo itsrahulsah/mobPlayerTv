@@ -1,88 +1,249 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>MobPlayer TV Test Client</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MobPlayer TV - Interactive Remote Controller</title>
     <style>
-        body { font-family: sans-serif; padding: 20px; }
-        .log-box { width: 100%; height: 300px; background: #f4f4f4; border: 1px solid #ccc; overflow-y: scroll; padding: 10px; font-family: monospace; }
-        .control-panel { margin-bottom: 20px; }
-        button, input { padding: 8px; margin-right: 5px; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 24px; background: #12141c; color: #fff; }
+        h2 { margin-bottom: 8px; color: #00e5ff; }
+        p { color: #8c9ba5; font-size: 14px; margin-bottom: 20px; }
+        .status-badge { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; background: #331518; color: #ff5252; margin-bottom: 16px; }
+        .status-connected { background: #0c3321; color: #00e676; }
+        .panel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .card { background: #1b1e2e; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 20px; }
+        .card h3 { font-size: 16px; color: #fff; margin-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px; }
+        .btn-group { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+        button { background: #262c45; color: #fff; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 10px 16px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.15s ease; }
+        button:hover { background: #38426b; border-color: #00e5ff; }
+        button:active { transform: scale(0.96); }
+        button.primary { background: #e50914; border-color: #e50914; }
+        button.primary:hover { background: #f40612; }
+        button.cyan { background: #0091ea; border-color: #00e5ff; }
+        button.cyan:hover { background: #00b0ff; }
+        button.danger { background: #b71c1c; border-color: #ff5252; }
+        button.danger:hover { background: #d50000; }
+        label { display: block; font-size: 11px; font-weight: 600; color: #8c9ba5; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+        input[type="text"], input[type="number"] { background: #0d0f17; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 10px 14px; color: #fff; font-size: 14px; outline: none; width: 100%; transition: border-color 0.2s ease; }
+        input[type="text"]:focus, input[type="number"]:focus { border-color: #00e5ff; }
+        
+        /* D-Pad Controller Layout */
+        .dpad-container { display: flex; flex-direction: column; align-items: center; justify-content: center; margin: 16px 0; }
+        .dpad-row { display: flex; gap: 8px; margin: 4px 0; }
+        .dpad-btn { width: 64px; height: 50px; display: flex; align-items: center; justify-content: center; font-size: 18px; border-radius: 8px; }
+        .dpad-center { background: #e50914; border-color: #e50914; }
+
+        .log-box { width: 100%; height: 260px; background: #0d0f17; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; overflow-y: scroll; padding: 12px; font-family: monospace; font-size: 12px; }
+        .log-item { margin-bottom: 4px; line-height: 1.4; word-break: break-all; }
     </style>
 </head>
 <body>
-    <h2>MobPlayer TV - WebSocket Test Client</h2>
-    <p>Status: <span id="status" style="color: red; font-weight: bold;">Disconnected</span></p>
-    
-    <div class="control-panel">
-        <button onclick="connect()">1. Connect to TV Server</button>
-        <button onclick="sendAuthRequest()">2. Request Auth</button>
-        <input type="text" id="pinInput" placeholder="Enter PIN from TV" />
-        <button onclick="sendPinSubmit()">3. Submit PIN</button>
-        <button onclick="sendPlayCommand()">4. Send PLAY</button>
+    <h2>MobPlayer TV - Interactive Remote Controller</h2>
+    <p>Test remote control actions, D-pad navigation, volume, and playback commands over WebSocket.</p>
+    <div id="status" class="status-badge">Disconnected</div>
+
+    <div class="panel-grid">
+        <!-- Connection & Authentication Panel -->
+        <div class="card">
+            <h3>1. Pairing & Connection</h3>
+            
+            <!-- IP Address & Port Configuration -->
+            <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+                <div style="flex: 2;">
+                    <label for="ipInput">Server IP Address</label>
+                    <input type="text" id="ipInput" value="localhost" placeholder="localhost or TV IP (e.g. 192.168.1.10)" />
+                </div>
+                <div style="flex: 1;">
+                    <label for="portInput">Port</label>
+                    <input type="number" id="portInput" value="8080" placeholder="8080" />
+                </div>
+            </div>
+
+            <div class="btn-group">
+                <button class="cyan" onclick="connect()">Connect</button>
+                <button class="danger" onclick="disconnect()">Disconnect</button>
+                <button onclick="sendAuthRequest()">Auto Auth (Saved Token)</button>
+            </div>
+
+            <div style="margin-top: 14px;">
+                <label for="pinInput">Pairing PIN</label>
+                <div style="display: flex; gap: 8px;">
+                    <input type="text" id="pinInput" placeholder="Enter 4-digit PIN" maxlength="4" style="width: 160px;" />
+                    <button class="primary" onclick="sendPinSubmit()">Submit PIN</button>
+                </div>
+            </div>
+
+            <h3 style="margin-top: 24px;">2. Media Streaming</h3>
+            <div>
+                <label for="mediaUrl">Direct Video Stream URL</label>
+                <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+                    <input type="text" id="mediaUrl" placeholder="Direct MP4 / HLS URL" value="https://storage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4" style="flex: 1;" />
+                    <button class="primary" onclick="sendLoadMedia()">Stream on TV</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- TV Remote D-Pad & Controls -->
+        <div class="card">
+            <h3>3. Remote Controller</h3>
+            
+            <div class="dpad-container">
+                <button class="dpad-btn" onclick="sendAction('DPAD_UP')">▲</button>
+                <div class="dpad-row">
+                    <button class="dpad-btn" onclick="sendAction('DPAD_LEFT')">◄</button>
+                    <button class="dpad-btn dpad-center" onclick="sendAction('DPAD_CENTER')">OK</button>
+                    <button class="dpad-btn" onclick="sendAction('DPAD_RIGHT')">►</button>
+                </div>
+                <button class="dpad-btn" onclick="sendAction('DPAD_DOWN')">▼</button>
+            </div>
+
+            <div class="btn-group" style="justify-content: center;">
+                <button onclick="sendAction('BACK')">↩ Back</button>
+                <button onclick="sendAction('HOME')">🏠 Home</button>
+                <button class="primary" onclick="sendAction('PLAY')">▶ Play</button>
+                <button onclick="sendAction('PAUSE')">⏸ Pause</button>
+                <button onclick="sendAction('STOP')">⏹ Stop</button>
+            </div>
+
+            <div class="btn-group" style="justify-content: center; margin-top: 8px;">
+                <button onclick="sendAction('SEEK_BACKWARD')">⏪ -10s</button>
+                <button onclick="sendAction('SEEK_FORWARD')">⏩ +10s</button>
+                <button onclick="sendAction('VOLUME_UP')">🔊 Vol +</button>
+                <button onclick="sendAction('VOLUME_DOWN')">🔉 Vol -</button>
+                <button onclick="sendAction('MUTE')">🔇 Mute</button>
+            </div>
+        </div>
     </div>
 
-    <div class="log-box" id="logBox"></div>
+    <div class="card" style="margin-top: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px;">
+            <h3 style="margin-bottom: 0; border-bottom: none; padding-bottom: 0;">Activity Log & WebSocket Messages</h3>
+            <button onclick="clearLog()" style="padding: 4px 10px; font-size: 12px;">Clear Log</button>
+        </div>
+        <div class="log-box" id="logBox"></div>
+    </div>
 
     <script>
         let ws;
         const logBox = document.getElementById('logBox');
         const statusSpan = document.getElementById('status');
 
-        function log(message) {
-            logBox.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${message}</div>`;
+        function log(message, color = "#fff") {
+            const time = new Date().toLocaleTimeString();
+            logBox.innerHTML += `<div class="log-item" style="color: ${color}">[${time}] ${message}</div>`;
             logBox.scrollTop = logBox.scrollHeight;
         }
 
+        function clearLog() {
+            logBox.innerHTML = '';
+        }
+
+        function getTargetEndpoint() {
+            const ip = document.getElementById('ipInput').value.trim() || 'localhost';
+            const port = document.getElementById('portInput').value.trim() || '8080';
+            return { ip, port, url: `ws://${ip}:${port}/control` };
+        }
+
         function connect() {
-            if (ws) ws.close();
-            log("Attempting to connect to ws://localhost:8080/control...");
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+
+            const { ip, port, url } = getTargetEndpoint();
+            log(`Attempting to connect to ${url}...`, "#00e5ff");
             
-            ws = new WebSocket("ws://localhost:8080/control");
+            try {
+                ws = new WebSocket(url);
+            } catch (err) {
+                log(`Failed to create WebSocket connection to ${url}: ${err.message}`, "#ff5252");
+                return;
+            }
             
             ws.onopen = () => {
-                statusSpan.textContent = "Connected!";
-                statusSpan.style.color = "green";
-                log("<b>Connection established!</b> Server is running.");
+                statusSpan.textContent = `Connected (${ip}:${port}) - Needs Auth`;
+                statusSpan.className = "status-badge status-connected";
+                log(`<b>Connection established!</b> Connected to MobPlayer TV server at <b>${url}</b>`, "#00e676");
             };
             
             ws.onmessage = (event) => {
-                log(`<span style="color: blue;">Received:</span> ${event.data}`);
+                log(`&lt;-- Received: ${event.data}`, "#00b0ff");
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === "AUTH_SUCCESS") {
+                        statusSpan.textContent = `Authenticated & Active (${ip}:${port})`;
+                        localStorage.setItem("mobplayer_token", data.payload);
+                        log("<b>Authentication successful!</b> Stored token: " + data.payload, "#00e676");
+                    } else if (data.type === "AUTH_FAILED") {
+                        log("❌ Authentication failed: " + data.payload, "#ff5252");
+                    } else if (data.type === "PIN_REQUIRED") {
+                        log("🔢 PIN required by TV. Enter the 4-digit PIN shown on the TV screen.", "#ffd600");
+                    }
+                } catch(e) {}
             };
             
             ws.onclose = () => {
                 statusSpan.textContent = "Disconnected";
-                statusSpan.style.color = "red";
-                log("Connection closed.");
+                statusSpan.className = "status-badge";
+                log("Connection closed.", "#ff5252");
             };
             
             ws.onerror = (error) => {
-                log(`<span style="color: red;">Error:</span> Failed to connect. Is the port forwarded? Run: adb forward tcp:8080 tcp:8080`);
+                const { ip, port } = getTargetEndpoint();
+                log(`Failed to connect to ws://${ip}:${port}/control. If using emulator, run 'adb forward tcp:${port} tcp:${port}'. If physical TV, verify Wi-Fi IP and port ${port}.`, "#ff5252");
             };
         }
 
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+                statusSpan.textContent = "Disconnected";
+                statusSpan.className = "status-badge";
+                log("Disconnected by user.", "#ffd600");
+            } else {
+                log("No active connection to disconnect.", "#8c9ba5");
+            }
+        }
+
         function sendAuthRequest() {
-            if (!ws || ws.readyState !== WebSocket.OPEN) return log("Not connected.");
-            const msg = JSON.stringify({ type: "AUTH_REQUEST", payload: "no-token-yet" });
+            if (!ws || ws.readyState !== WebSocket.OPEN) return log("Not connected to TV.", "#ff5252");
+            const token = localStorage.getItem("mobplayer_token") || "no-token-yet";
+            const msg = JSON.stringify({ type: "AUTH_REQUEST", payload: token });
             ws.send(msg);
-            log(`Sent: ${msg}`);
+            log(`--&gt; Sent AUTH_REQUEST: ${msg}`, "#ffd600");
         }
 
         function sendPinSubmit() {
-            if (!ws || ws.readyState !== WebSocket.OPEN) return log("Not connected.");
-            const pin = document.getElementById('pinInput').value;
+            if (!ws || ws.readyState !== WebSocket.OPEN) return log("Not connected to TV.", "#ff5252");
+            const pin = document.getElementById('pinInput').value.trim();
+            if (!pin) return log("Please enter a PIN first.", "#ff5252");
             const msg = JSON.stringify({ type: "PIN_SUBMIT", payload: pin });
             ws.send(msg);
-            log(`Sent: ${msg}`);
+            log(`--&gt; Sent PIN_SUBMIT: ${pin}`, "#ffd600");
         }
 
-        function sendPlayCommand() {
-            if (!ws || ws.readyState !== WebSocket.OPEN) return log("Not connected.");
-            const msg = JSON.stringify({ 
-                type: "COMMAND", 
-                payload: JSON.stringify({ action: "PLAY" }) 
+        function sendAction(actionName) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return log("Not connected to TV.", "#ff5252");
+            const msg = JSON.stringify({
+                type: "COMMAND",
+                payload: JSON.stringify({ action: actionName })
             });
             ws.send(msg);
-            log(`Sent: ${msg}`);
+            log(`--&gt; Sent Action: <b>${actionName}</b>`, "#00e5ff");
+        }
+
+        function sendLoadMedia() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return log("Not connected to TV.", "#ff5252");
+            const url = document.getElementById('mediaUrl').value.trim();
+            if (!url) return log("Please provide a video URL.", "#ff5252");
+            const msg = JSON.stringify({
+                type: "LOAD_MEDIA",
+                payload: url
+            });
+            ws.send(msg);
+            log(`--&gt; Sent LOAD_MEDIA: ${url}`, "#e040fb");
         }
     </script>
 </body>

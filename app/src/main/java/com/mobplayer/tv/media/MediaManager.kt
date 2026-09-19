@@ -70,8 +70,19 @@ object MediaManager {
         player?.pause()
     }
 
+    fun stop() {
+        player?.stop()
+        player?.clearMediaItems()
+        updateState()
+    }
+
     fun seekTo(positionMs: Long) {
         player?.seekTo(positionMs)
+    }
+
+    fun setVolume(volume: Float) {
+        player?.volume = volume.coerceIn(0f, 1f)
+        updateState()
     }
 
     fun loadMedia(url: String) {
@@ -85,8 +96,9 @@ object MediaManager {
         val exo = player ?: return
         val isPlaying = exo.isPlaying
         val positionMs = exo.currentPosition
+        val durationMs = if (exo.duration > 0) exo.duration else 0L
         val volume = exo.volume
         
-        _playerStateFlow.value = PlayerStatePayload(isPlaying, positionMs, volume)
+        _playerStateFlow.value = PlayerStatePayload(isPlaying, positionMs, durationMs, volume)
     }
 }
