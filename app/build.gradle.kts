@@ -5,6 +5,13 @@ plugins {
     // id("com.google.dagger.hilt.android") // We will apply this later when configuring dagger
 }
 
+// Keep the root test client as the single source, packaging only that file.
+val testClientAssets = layout.buildDirectory.dir("generated/testClientAssets")
+val syncTestClientAssets by tasks.registering(Sync::class) {
+    from(rootProject.file("test_client.html"))
+    into(testClientAssets)
+}
+
 android {
     namespace = "com.mobplayer.tv"
     compileSdk = 34
@@ -42,6 +49,11 @@ android {
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.8"
     }
+    sourceSets.getByName("main").assets.srcDir(testClientAssets)
+}
+
+tasks.named("preBuild") {
+    dependsOn(syncTestClientAssets)
 }
 
 dependencies {
@@ -50,13 +62,16 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     
-    // Compose for TV
+    // Compose for TV & UI
     implementation("androidx.compose.ui:ui:1.6.2")
     implementation("androidx.compose.ui:ui-graphics:1.6.2")
     implementation("androidx.compose.ui:ui-tooling-preview:1.6.2")
+    implementation("androidx.compose.material3:material3:1.2.1")
+    implementation("androidx.compose.material:material-icons-extended:1.6.2")
     implementation("androidx.tv:tv-foundation:1.0.0-alpha10")
     implementation("androidx.tv:tv-material:1.0.0-alpha10")
     implementation("androidx.activity:activity-compose:1.8.2")
+    implementation("io.coil-kt:coil-compose:2.6.0")
 
     // Ktor Server (WebSockets & Networking)
     val ktorVersion = "2.3.9"

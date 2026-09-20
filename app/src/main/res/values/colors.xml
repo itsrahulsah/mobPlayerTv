@@ -1,7 +1,105 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Basic Palette -->
     <color name="black">#000000</color>
     <color name="white">#FFFFFF</color>
+    <color name="transparent">#00000000</color>
     <color name="dialog_background">#CC000000</color>
     <color name="light_gray">#D3D3D3</color>
+
+    <!-- TV Core Theme Colors -->
+    <color name="background_dark">#090A0F</color>
+    <color name="surface_dark">#13151F</color>
+    <color name="surface_elevated">#1E2235</color>
+    <color name="card_background">#161926</color>
+
+    <!-- TV Pairing Screen Gradient -->
+    <color name="background_radial_center">#1A1D2E</color>
+    <color name="background_radial_edge">#040508</color>
+
+    <!-- Accents -->
+    <color name="primary_accent">#E50914</color>
+    <color name="primary_accent_dark">#B71C1C</color>
+    <color name="primary_accent_deep">#990000</color>
+    <color name="secondary_accent">#00E5FF</color>
+    <color name="gold_accent">#FFB300</color>
+    <color name="live_red">#FF1744</color>
+    <color name="connected_green">#00E676</color>
+
+    <!-- Text Colors -->
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#B0B7C3</color>
+    <color name="text_tertiary">#717B90</color>
+
+    <!-- Focus & Glow -->
+    <color name="focus_border">#FFFFFF</color>
+    <color name="focus_glow">#6600E5FF</color>
+
+    <!-- HUD Remote Action Gradients -->
+    <color name="hud_play_start">#00C853</color>
+    <color name="hud_play_end">#1B5E20</color>
+    <color name="hud_pause_start">#FF9100</color>
+    <color name="hud_pause_end">#E65100</color>
+    <color name="hud_volume_up_start">#00E5FF</color>
+    <color name="hud_volume_up_end">#0091EA</color>
+    <color name="hud_volume_down_start">#00B0FF</color>
+    <color name="hud_volume_down_end">#0277BD</color>
+    <color name="hud_mute_start">#FF1744</color>
+    <color name="hud_mute_end">#B71C1C</color>
+    <color name="hud_seek_start">#7C4DFF</color>
+    <color name="hud_seek_end">#6200EA</color>
+    <color name="hud_dpad_start">#2979FF</color>
+    <color name="hud_dpad_end">#1565C0</color>
+    <color name="hud_select_start">#00E676</color>
+    <color name="hud_select_end">#00B248</color>
+    <color name="hud_back_start">#FF5252</color>
+    <color name="hud_back_end">#D50000</color>
+    <color name="hud_home_start">#FF4081</color>
+    <color name="hud_home_end">#C51162</color>
+    <color name="hud_media_start">#E040FB</color>
+    <color name="hud_media_end">#AA00FF</color>
+    <color name="hud_info_start">#00E5FF</color>
+    <color name="hud_info_end">#0091EA</color>
+
+    <!-- Card & Content Gradients -->
+    <color name="card_placeholder_start">#1E293B</color>
+    <color name="card_placeholder_end">#0F172A</color>
+    <color name="gradient_cyberpunk_1">#2E0854</color>
+    <color name="gradient_cyberpunk_2">#0B001A</color>
+    <color name="gradient_cosmic_1">#0F2027</color>
+    <color name="gradient_cosmic_2">#203A43</color>
+    <color name="gradient_cosmic_3">#2C5364</color>
+    <color name="gradient_tokyo_1">#8A2387</color>
+    <color name="gradient_tokyo_2">#E94057</color>
+    <color name="gradient_tokyo_3">#F27121</color>
+    <color name="gradient_nordic_1">#1F1C2C</color>
+    <color name="gradient_nordic_2">#928DAB</color>
+    <color name="gradient_apex_1">#141E30</color>
+    <color name="gradient_apex_2">#243B55</color>
+    <color name="gradient_nebula_1">#11998E</color>
+    <color name="gradient_nebula_2">#38EF7D</color>
+    <color name="gradient_silicon_1">#3A6073</color>
+    <color name="gradient_silicon_2">#3A7BD5</color>
+    <color name="gradient_crimson_1">#EB3349</color>
+    <color name="gradient_crimson_2">#F45C43</color>
+    <color name="gradient_quantum_1">#4B1248</color>
+    <color name="gradient_quantum_2">#F0C27B</color>
+    <color name="gradient_velvet_1">#F12711</color>
+    <color name="gradient_velvet_2">#F5AF19</color>
+    <color name="gradient_deep_blue_1">#000428</color>
+    <color name="gradient_deep_blue_2">#004E92</color>
+    <color name="gradient_purple_night_1">#330867</color>
+    <color name="gradient_purple_night_2">#30CFD0</color>
+    <color name="gradient_dark_slate_1">#2C3E50</color>
+    <color name="gradient_dark_slate_2">#3498DB</color>
+    <color name="gradient_monochrome_1">#434343</color>
+    <color name="gradient_monochrome_2">#000000</color>
+    <color name="gradient_cinema_red_1">#B71C1C</color>
+    <color name="gradient_cinema_red_2">#212121</color>
+    <color name="gradient_news_1">#1A237E</color>
+    <color name="gradient_news_2">#0D47A1</color>
+    <color name="gradient_esports_1">#4A148C</color>
+    <color name="gradient_esports_2">#880E4F</color>
+    <color name="gradient_wildlife_1">#006064</color>
+    <color name="gradient_wildlife_2">#004D40</color>
 </resources>

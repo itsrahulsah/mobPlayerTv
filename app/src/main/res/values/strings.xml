@@ -1,8 +1,63 @@
 <resources>
+    <!-- App Branding -->
     <string name="app_name">MobPlayer TV</string>
+    <string name="brand_name">MOBPLAYER</string>
+    <string name="brand_tag">TV</string>
+    <string name="app_logo_description">App Logo</string>
+
+    <!-- Pairing Screen -->
     <string name="enter_pin">Enter this PIN on your device:</string>
+    <string name="pairing_title">Connect Your Mobile Controller</string>
+    <string name="pairing_subtitle">Open the MobPlayer mobile app on your phone and enter this 4-digit pairing PIN:</string>
+    <string name="pairing_wifi_desc">Wi-Fi</string>
+    <string name="tv_server_emulator">TV Server (Emulator): ws://10.0.2.2:%1$d/control</string>
+    <string name="tv_server_ip">TV Server: ws://%1$s:%2$d/control</string>
+    <string name="tv_server_port">TV Server Port: %1$d</string>
+    <string name="emulator_setup_title">⚡ Android Emulator Testing Setup</string>
+    <string name="emulator_setup_instructions">1. On your PC terminal, run:  adb forward tcp:%1$d tcp:%1$d\n2. In MobPlayer Remote app, tap \'+\' (Enter IP) and use: 10.0.2.2 : %1$d</string>
+    <string name="demo_mode_desc">Demo Mode</string>
+    <string name="preview_tv_home">Preview TV Streaming Home Screen</string>
+
+    <!-- Navigation Tabs -->
+    <string name="tab_home">Home</string>
+    <string name="tab_movies">Movies</string>
+    <string name="tab_shows">Shows</string>
+    <string name="tab_live_tv">Live TV</string>
+    <string name="tab_my_list">My List</string>
+
+    <!-- Connection & Status -->
+    <string name="status_connected">Connected</string>
+    <string name="status_controller_connected">Controller Connected</string>
+    <string name="status_controlled_via">Controlled via %1$s</string>
+    <string name="default_controller_name">Mobile Controller</string>
+    <string name="default_controller_device">Mobile</string>
+    <string name="demo_controller_name">Demo Controller</string>
     <string name="device_connecting">%1$s is trying to connect.</string>
     <string name="disconnect_prompt">Disconnect current controller?</string>
     <string name="allow">Allow</string>
     <string name="reject">Reject</string>
+
+    <!-- Video Player & Playback -->
+    <string name="now_playing">Now Playing</string>
+    <string name="default_media_title">Streaming Media</string>
+    <string name="streaming_quality_info">Streaming in Full HD • Dolby Digital 5.1</string>
+    <string name="action_playing">Playing %1$s</string>
+    <string name="starting_stream">Starting stream</string>
+
+    <!-- Action Buttons & Labels -->
+    <string name="btn_watch_now">Watch Now</string>
+    <string name="btn_my_list">My List</string>
+    <string name="btn_details">Details</string>
+    <string name="btn_exit_to_tv_home">Exit to TV Home</string>
+    <string name="action_back">Back</string>
+    <string name="action_play">Play</string>
+    <string name="action_pause">Pause</string>
+    <string name="rating_desc">Rating</string>
+    <string name="live_badge">LIVE</string>
+    <string name="remote_badge">REMOTE</string>
+
+    <!-- Background Service & Notifications -->
+    <string name="notification_channel_name">MobPlayer TV Background Service</string>
+    <string name="notification_title">MobPlayer TV Server</string>
+    <string name="notification_content">Listening for controller connections...</string>
 </resources>
