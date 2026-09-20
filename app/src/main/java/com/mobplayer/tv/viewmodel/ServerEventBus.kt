@@ -30,6 +30,11 @@ object ServerEventBus {
 
     var onInjectKeyEvent: ((Int) -> Unit)? = null
     var onRequestNewPin: (() -> String)? = null
+    var onCloseSession: (() -> Unit)? = null
+
+    fun closeActiveSession() {
+        onCloseSession?.invoke()
+    }
 
     fun showPin(pin: String) {
         val isEmu = com.mobplayer.tv.network.NetworkUtils.isEmulator()
@@ -110,8 +115,22 @@ object ServerEventBus {
     }
 
     fun injectKey(keyCode: Int) {
-        scope.launch {
-            logRemoteEvent("KeyInject", "Injecting KeyCode: $keyCode into TV UI")
+        val hasAndroidLooper = try {
+            android.os.Build.VERSION.SDK_INT > 0 && android.os.Looper.getMainLooper() != null
+        } catch (_: Throwable) {
+            false
+        }
+
+        if (hasAndroidLooper) {
+            if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+                onInjectKeyEvent?.invoke(keyCode)
+            } else {
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    onInjectKeyEvent?.invoke(keyCode)
+                }
+            }
+        } else {
+            // Unit test / JVM environment
             onInjectKeyEvent?.invoke(keyCode)
         }
     }

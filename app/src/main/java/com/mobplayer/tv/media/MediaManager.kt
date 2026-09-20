@@ -3,6 +3,7 @@ package com.mobplayer.tv.media
 import android.content.Context
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import com.mobplayer.tv.models.PlayerStatePayload
@@ -19,10 +20,25 @@ object MediaManager {
     val playerStateFlow: StateFlow<PlayerStatePayload?> = _playerStateFlow
 
     fun initialize(context: Context): ExoPlayer {
-        val exoPlayer = ExoPlayer.Builder(context).build()
+        player?.let { return it }
+        val appContext = context.applicationContext
+
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                /* minBufferMs = */ 15_000,
+                /* maxBufferMs = */ 50_000,
+                /* bufferForPlaybackMs = */ 500,
+                /* bufferForPlaybackAfterRebufferMs = */ 1_000
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
+
+        val exoPlayer = ExoPlayer.Builder(appContext)
+            .setLoadControl(loadControl)
+            .build()
         player = exoPlayer
         
-        mediaSession = MediaSession.Builder(context, exoPlayer).build()
+        mediaSession = MediaSession.Builder(appContext, exoPlayer).build()
 
         exoPlayer.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {

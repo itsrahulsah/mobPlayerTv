@@ -31,6 +31,8 @@ import com.mobplayer.tv.models.RemoteIconType
 import com.mobplayer.tv.ui.theme.TvColors
 import com.mobplayer.tv.viewmodel.ServerEventBus
 
+import androidx.compose.animation.core.tween
+
 @Composable
 fun TvRemoteActionHud(
     modifier: Modifier = Modifier
@@ -45,8 +47,14 @@ fun TvRemoteActionHud(
     ) {
         AnimatedVisibility(
             visible = currentEvent != null,
-            enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
-            exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut()
+            enter = slideInVertically(
+                animationSpec = tween(150),
+                initialOffsetY = { -it }
+            ) + fadeIn(animationSpec = tween(150)),
+            exit = slideOutVertically(
+                animationSpec = tween(150),
+                targetOffsetY = { -it }
+            ) + fadeOut(animationSpec = tween(150))
         ) {
             currentEvent?.let { event ->
                 RemoteActionCard(event = event)
@@ -64,7 +72,7 @@ private fun RemoteActionCard(event: RemoteActionEvent) {
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         modifier = Modifier
             .clip(RoundedCornerShape(16.dp))
-            .shadow(16.dp, RoundedCornerShape(16.dp))
+            .shadow(4.dp, RoundedCornerShape(16.dp))
             .background(TvColors.SurfaceElevated.copy(alpha = 0.95f))
             .border(
                 width = 1.5.dp,

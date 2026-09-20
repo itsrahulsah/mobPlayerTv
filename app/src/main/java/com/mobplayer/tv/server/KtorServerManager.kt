@@ -26,6 +26,7 @@ import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.pingPeriod
 import io.ktor.server.websocket.timeout
 import io.ktor.server.websocket.webSocket
+import io.ktor.websocket.CloseReason
 import io.ktor.websocket.DefaultWebSocketSession
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
@@ -118,6 +119,10 @@ class KtorServerManager(private val context: Context) {
             currentPin
         }
 
+        ServerEventBus.onCloseSession = {
+            closeActiveSession()
+        }
+
         // Show PIN on TV on startup
         currentPin = authManager.generatePin()
         ServerEventBus.showPin(currentPin)
@@ -193,6 +198,11 @@ class KtorServerManager(private val context: Context) {
                     }
                 } else {
                     // Authenticated Remote Command Execution
+                    if (activeSession != session) {
+                        Log.w("RemoteEvent", "⚠️ Ignoring message: session is no longer the active session")
+                        session.close(CloseReason(CloseReason.Codes.NORMAL, "Session closed"))
+                        return
+                    }
                     processIncomingRemoteEvent(message, session)
                 }
             } catch (e: Exception) {
@@ -258,7 +268,7 @@ class KtorServerManager(private val context: Context) {
         val action = actionRaw.uppercase().trim()
         Log.i("RemoteEvent", "🎯 [Executing Action] '$action' with payload: $payload")
 
-        withContext(Dispatchers.Main) {
+        withContext(Dispatchers.Main.immediate) {
             when (action) {
                 "PLAY", "RESUME" -> {
                     MediaManager.play()
@@ -382,20 +392,14 @@ class KtorServerManager(private val context: Context) {
                     }
                 }
 
-                // D-Pad Navigation Keys
+                // D-Pad Navigation Keys: navigate immediately without HUD animation lag
                 "DPAD_UP", "UP" -> {
                     ServerEventBus.injectKey(KeyEvent.KEYCODE_DPAD_UP)
-                    ServerEventBus.postRemoteAction(
-                        RemoteActionEvent("DPAD_UP", "▲ Up", "Navigating", RemoteIconType.DPAD_UP)
-                    )
                     Log.i("RemoteEvent", "▲ [Action Complete] DPAD_UP injected")
                 }
 
                 "DPAD_DOWN", "DOWN" -> {
                     ServerEventBus.injectKey(KeyEvent.KEYCODE_DPAD_DOWN)
-                    ServerEventBus.postRemoteAction(
-                        RemoteActionEvent("DPAD_DOWN", "▼ Down", "Navigating", RemoteIconType.DPAD_DOWN)
-                    )
                     Log.i("RemoteEvent", "▼ [Action Complete] DPAD_DOWN injected")
                 }
 
@@ -409,9 +413,6 @@ class KtorServerManager(private val context: Context) {
                         )
                     } else {
                         ServerEventBus.injectKey(KeyEvent.KEYCODE_DPAD_LEFT)
-                        ServerEventBus.postRemoteAction(
-                            RemoteActionEvent("DPAD_LEFT", "◄ Left", "Navigating", RemoteIconType.DPAD_LEFT)
-                        )
                     }
                     Log.i("RemoteEvent", "◄ [Action Complete] DPAD_LEFT handled")
                 }
@@ -426,9 +427,6 @@ class KtorServerManager(private val context: Context) {
                         )
                     } else {
                         ServerEventBus.injectKey(KeyEvent.KEYCODE_DPAD_RIGHT)
-                        ServerEventBus.postRemoteAction(
-                            RemoteActionEvent("DPAD_RIGHT", "► Right", "Navigating", RemoteIconType.DPAD_RIGHT)
-                        )
                     }
                     Log.i("RemoteEvent", "► [Action Complete] DPAD_RIGHT handled")
                 }
@@ -449,9 +447,6 @@ class KtorServerManager(private val context: Context) {
                         }
                     } else {
                         ServerEventBus.injectKey(KeyEvent.KEYCODE_DPAD_CENTER)
-                        ServerEventBus.postRemoteAction(
-                            RemoteActionEvent("SELECT", "🔘 Select", "Action", RemoteIconType.SELECT)
-                        )
                     }
                     Log.i("RemoteEvent", "🔘 [Action Complete] DPAD_CENTER / SELECT handled")
                 }
@@ -490,8 +485,12 @@ class KtorServerManager(private val context: Context) {
             }
         }
 
-        // Acknowledge action execution to the controller
-        session.send(Frame.Text(json.encodeToString(WebSocketMessage("COMMAND_SUCCESS", action))))
+        // Acknowledge action execution to the controller asynchronously so the incoming loop isn't blocked
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                session.send(Frame.Text(json.encodeToString(WebSocketMessage("COMMAND_SUCCESS", action))))
+            } catch (_: Exception) {}
+        }
     }
 
     private suspend fun handleLoadMedia(payload: String, session: DefaultWebSocketSession) {
@@ -504,7 +503,7 @@ class KtorServerManager(private val context: Context) {
 
         Log.i("RemoteEvent", "🎬 [Loading Media] URL='$url', Title='$title'")
 
-        withContext(Dispatchers.Main) {
+        withContext(Dispatchers.Main.immediate) {
             ServerEventBus.openPlayer(title)
             MediaManager.loadMedia(url)
             ServerEventBus.postRemoteAction(
@@ -512,7 +511,11 @@ class KtorServerManager(private val context: Context) {
             )
         }
 
-        session.send(Frame.Text(json.encodeToString(WebSocketMessage("COMMAND_SUCCESS", "LOAD_MEDIA"))))
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                session.send(Frame.Text(json.encodeToString(WebSocketMessage("COMMAND_SUCCESS", "LOAD_MEDIA"))))
+            } catch (_: Exception) {}
+        }
     }
 
     private suspend fun handleKeyEvent(payload: String, session: DefaultWebSocketSession) {
@@ -531,23 +534,14 @@ class KtorServerManager(private val context: Context) {
         Log.i("RemoteEvent", "⌨️ [Key Event] KeyCode=$keyCode for payload='$payload'")
 
         if (keyCode != KeyEvent.KEYCODE_UNKNOWN) {
-            withContext(Dispatchers.Main) {
+            withContext(Dispatchers.Main.immediate) {
                 ServerEventBus.injectKey(keyCode)
-                val icon = when (keyCode) {
-                    KeyEvent.KEYCODE_DPAD_UP -> RemoteIconType.DPAD_UP
-                    KeyEvent.KEYCODE_DPAD_DOWN -> RemoteIconType.DPAD_DOWN
-                    KeyEvent.KEYCODE_DPAD_LEFT -> RemoteIconType.DPAD_LEFT
-                    KeyEvent.KEYCODE_DPAD_RIGHT -> RemoteIconType.DPAD_RIGHT
-                    KeyEvent.KEYCODE_DPAD_CENTER -> RemoteIconType.SELECT
-                    KeyEvent.KEYCODE_BACK -> RemoteIconType.BACK
-                    KeyEvent.KEYCODE_HOME -> RemoteIconType.HOME
-                    else -> RemoteIconType.INFO
-                }
-                ServerEventBus.postRemoteAction(
-                    RemoteActionEvent("KEY_EVENT", "Key: $payload", "KeyCode $keyCode", icon)
-                )
             }
-            session.send(Frame.Text(json.encodeToString(WebSocketMessage("COMMAND_SUCCESS", "KEY_EVENT"))))
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    session.send(Frame.Text(json.encodeToString(WebSocketMessage("COMMAND_SUCCESS", "KEY_EVENT"))))
+                } catch (_: Exception) {}
+            }
         } else {
             Log.w("RemoteEvent", "⚠️ Unknown key event code for payload: '$payload'")
         }
@@ -605,8 +599,26 @@ class KtorServerManager(private val context: Context) {
         }
     }
 
+    fun closeActiveSession() {
+        val session = activeSession
+        activeSession = null
+        stateBroadcastJob?.cancel()
+        stateBroadcastJob = null
+        if (session != null) {
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    session.close(CloseReason(CloseReason.Codes.NORMAL, "Disconnected by TV"))
+                } catch (e: Exception) {
+                    Log.e("RemoteEvent", "Error closing active session: ${e.message}")
+                }
+            }
+        }
+    }
+
     fun stopServer() {
         ServerEventBus.onRequestNewPin = null
+        ServerEventBus.onCloseSession = null
+        closeActiveSession()
         server?.stop(1_000, 2_000)
         server = null
         Log.i("RemoteEvent", "Server stopped")

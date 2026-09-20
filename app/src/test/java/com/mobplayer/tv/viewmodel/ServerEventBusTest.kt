@@ -71,6 +71,15 @@ class ServerEventBusTest {
     }
 
     @Test
+    fun `test closeActiveSession invokes onCloseSession callback`() {
+        var closed = false
+        ServerEventBus.onCloseSession = { closed = true }
+        ServerEventBus.closeActiveSession()
+        assertTrue(closed)
+        ServerEventBus.onCloseSession = null
+    }
+
+    @Test
     fun `test enterDemoMode configures demo controller`() {
         ServerEventBus.enterDemoMode()
         assertTrue(ServerEventBus.isConnected.value)

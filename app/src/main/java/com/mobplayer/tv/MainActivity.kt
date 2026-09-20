@@ -3,11 +3,14 @@ package com.mobplayer.tv
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.os.Looper
+import android.os.SystemClock
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -53,11 +56,17 @@ class MainActivity : ComponentActivity() {
 
         // Setup D-pad key event injection from mobile controller
         ServerEventBus.onInjectKeyEvent = { keyCode ->
-            runOnUiThread {
-                val down = KeyEvent(KeyEvent.ACTION_DOWN, keyCode)
-                val up = KeyEvent(KeyEvent.ACTION_UP, keyCode)
+            val sendEvent = {
+                val now = SystemClock.uptimeMillis()
+                val down = KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0)
+                val up = KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0)
                 dispatchKeyEvent(down)
                 dispatchKeyEvent(up)
+            }
+            if (Looper.myLooper() == Looper.getMainLooper()) {
+                sendEvent()
+            } else {
+                runOnUiThread { sendEvent() }
             }
         }
 
@@ -113,7 +122,9 @@ class MainActivity : ComponentActivity() {
                             // Connection successful: TV Streaming Experience
                             AnimatedContent(
                                 targetState = isPlayerActive,
-                                transitionSpec = { fadeIn() togetherWith fadeOut() },
+                                transitionSpec = {
+                                    fadeIn(animationSpec = tween(120)) togetherWith fadeOut(animationSpec = tween(120))
+                                },
                                 label = "ScreenTransition"
                             ) { playerOpen ->
                                 if (playerOpen) {
@@ -157,6 +168,7 @@ class MainActivity : ComponentActivity() {
                                         onDisconnect = {
                                             ServerEventBus.closePlayer()
                                             MediaManager.stop()
+                                            ServerEventBus.closeActiveSession()
                                             ServerEventBus.onClientDisconnected()
                                             ServerEventBus.requestPin()
                                         }
@@ -175,8 +187,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         ServerEventBus.onInjectKeyEvent = null
-        MediaManager.release()
-        stopService(Intent(this, WebSocketServerService::class.java))
+        if (!isChangingConfigurations) {
+            MediaManager.release()
+            stopService(Intent(this, WebSocketServerService::class.java))
+        }
         super.onDestroy()
     }
 }

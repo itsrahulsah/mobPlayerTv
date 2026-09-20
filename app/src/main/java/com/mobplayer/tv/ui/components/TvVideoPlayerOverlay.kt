@@ -1,5 +1,6 @@
 package com.mobplayer.tv.ui.components
 
+import android.view.KeyEvent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -23,8 +24,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -43,40 +50,84 @@ fun TvVideoPlayerOverlay(
 ) {
     val playerState by MediaManager.playerStateFlow.collectAsState()
     var isOverlayVisible by remember { mutableStateOf(true) }
+    var interactionTrigger by remember { mutableIntStateOf(0) }
+    val focusRequester = remember { FocusRequester() }
 
-    // Auto-hide controls after 5 seconds of inactivity unless playing changed
-    LaunchedEffect(playerState?.isPlaying) {
-        isOverlayVisible = true
-        delay(6000)
-        isOverlayVisible = false
+    // Auto-hide controls after 6 seconds of inactivity unless playing changed or user interacted
+    LaunchedEffect(isOverlayVisible, playerState?.isPlaying, interactionTrigger) {
+        if (isOverlayVisible) {
+            delay(6000)
+            isOverlayVisible = false
+        }
     }
 
-    AnimatedVisibility(
-        visible = isOverlayVisible,
-        enter = fadeIn(),
-        exit = fadeOut(),
-        modifier = modifier.fillMaxSize()
+    // Ensure focus is on the root input handler when controls hide so physical D-pad events are captured
+    LaunchedEffect(isOverlayVisible) {
+        if (!isOverlayVisible) {
+            try {
+                focusRequester.requestFocus()
+            } catch (_: Exception) {}
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .focusRequester(focusRequester)
+            .focusable()
+            .onKeyEvent { keyEvent ->
+                if (keyEvent.type == KeyEventType.KeyDown) {
+                    when (keyEvent.nativeKeyEvent.keyCode) {
+                        KeyEvent.KEYCODE_DPAD_CENTER,
+                        KeyEvent.KEYCODE_ENTER,
+                        KeyEvent.KEYCODE_NUMPAD_ENTER,
+                        KeyEvent.KEYCODE_DPAD_UP,
+                        KeyEvent.KEYCODE_DPAD_DOWN,
+                        KeyEvent.KEYCODE_DPAD_LEFT,
+                        KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                            if (!isOverlayVisible) {
+                                isOverlayVisible = true
+                                interactionTrigger++
+                                return@onKeyEvent true
+                            } else {
+                                interactionTrigger++
+                                return@onKeyEvent false
+                            }
+                        }
+                    }
+                }
+                false
+            }
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) {
+                isOverlayVisible = !isOverlayVisible
+                if (isOverlayVisible) {
+                    interactionTrigger++
+                }
+            }
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Black.copy(alpha = 0.8f),
-                            Color.Transparent,
-                            Color.Transparent,
-                            Color.Black.copy(alpha = 0.85f)
+        AnimatedVisibility(
+            visible = isOverlayVisible,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Black.copy(alpha = 0.8f),
+                                Color.Transparent,
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.85f)
+                            )
                         )
                     )
-                )
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) {
-                    isOverlayVisible = !isOverlayVisible
-                }
-        ) {
+            ) {
             // Top Bar: Back button and Connection indicator
             Row(
                 modifier = Modifier
@@ -100,6 +151,7 @@ fun TvVideoPlayerOverlay(
                             if (isBackFocused) Color.White else Color.White.copy(alpha = 0.3f),
                             RoundedCornerShape(12.dp)
                         )
+                        .onFocusChanged { isBackFocused = it.isFocused }
                         .focusable()
                         .clickable { onBackToHome() }
                         .padding(horizontal = 16.dp, vertical = 10.dp)
@@ -231,6 +283,7 @@ fun TvVideoPlayerOverlay(
             }
         }
     }
+}
 }
 
 private fun formatTimeMs(ms: Long): String {
