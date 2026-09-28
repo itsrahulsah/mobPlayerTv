@@ -8,8 +8,10 @@ import android.net.NetworkRequest
 import android.util.Log
 
 import android.os.Build
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
 
-class NetworkStateMonitor(context: Context) {
+class NetworkStateMonitor @Inject constructor(@ApplicationContext context: Context) {
     private val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     
@@ -27,14 +29,7 @@ class NetworkStateMonitor(context: Context) {
         }
         
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                connectivityManager.registerDefaultNetworkCallback(networkCallback!!)
-            } else {
-                val request = NetworkRequest.Builder()
-                    .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED)
-                    .build()
-                connectivityManager.registerNetworkCallback(request, networkCallback!!)
-            }
+            connectivityManager.registerDefaultNetworkCallback(networkCallback!!)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to register network callback", e)
         }

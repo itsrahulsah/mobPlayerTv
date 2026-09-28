@@ -1,16 +1,22 @@
-package com.mobplayer.tv.media
+package com.mobplayer.tv.repository
 
 import android.content.Context
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
-import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import com.mobplayer.tv.models.PlayerStatePayload
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import javax.inject.Inject
+import javax.inject.Singleton
 
-object MediaManager {
+@Singleton
+class MediaRepository @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
     var player: ExoPlayer? = null
         private set
         
@@ -19,30 +25,26 @@ object MediaManager {
     private val _playerStateFlow = MutableStateFlow<PlayerStatePayload?>(null)
     val playerStateFlow: StateFlow<PlayerStatePayload?> = _playerStateFlow
 
-    fun initialize(context: Context): ExoPlayer {
+    private var progressJob: Job? = null
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+
+    fun initialize(): ExoPlayer {
         player?.let { return it }
-        val appContext = context.applicationContext
 
-        val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(
-                /* minBufferMs = */ 15_000,
-                /* maxBufferMs = */ 50_000,
-                /* bufferForPlaybackMs = */ 500,
-                /* bufferForPlaybackAfterRebufferMs = */ 1_000
-            )
-            .setPrioritizeTimeOverSizeThresholds(true)
-            .build()
-
-        val exoPlayer = ExoPlayer.Builder(appContext)
-            .setLoadControl(loadControl)
+        val exoPlayer = ExoPlayer.Builder(context)
             .build()
         player = exoPlayer
         
-        mediaSession = MediaSession.Builder(appContext, exoPlayer).build()
+        mediaSession = MediaSession.Builder(context, exoPlayer).build()
 
         exoPlayer.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 updateState()
+                if (isPlaying) {
+                    startProgressPolling()
+                } else {
+                    stopProgressPolling()
+                }
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -65,7 +67,23 @@ object MediaManager {
         return exoPlayer
     }
 
+    private fun startProgressPolling() {
+        progressJob?.cancel()
+        progressJob = scope.launch {
+            while (isActive) {
+                delay(1000)
+                updateState()
+            }
+        }
+    }
+
+    private fun stopProgressPolling() {
+        progressJob?.cancel()
+        progressJob = null
+    }
+
     fun release() {
+        stopProgressPolling()
         mediaSession?.release()
         mediaSession = null
         player?.release()

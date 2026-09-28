@@ -1,12 +1,16 @@
-package com.mobplayer.tv.viewmodel
+package com.mobplayer.tv.repository
 
 import android.util.Log
 import com.mobplayer.tv.models.RemoteActionEvent
+import com.mobplayer.tv.viewmodel.ConnectionEvent
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import javax.inject.Inject
+import javax.inject.Singleton
 
-object ServerEventBus {
+@Singleton
+class ServerRepository @Inject constructor() {
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var actionDismissJob: Job? = null
 
