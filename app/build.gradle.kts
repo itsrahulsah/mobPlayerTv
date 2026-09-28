@@ -1,8 +1,14 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    kotlin("kapt")
     id("org.jetbrains.kotlin.plugin.serialization")
-    // id("com.google.dagger.hilt.android") // We will apply this later when configuring dagger
+    id("org.jetbrains.kotlin.plugin.compose")
+    id("com.google.dagger.hilt.android") // We will apply this later when configuring dagger
+}
+
+kotlin {
+    jvmToolchain(17)
 }
 
 // Keep the root test client as the single source, packaging only that file.
@@ -18,8 +24,8 @@ android {
 
     defaultConfig {
         applicationId = "com.mobplayer.tv"
-        minSdk = 24
-        targetSdk = 34
+        minSdk = 26
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0"
 
@@ -39,15 +45,9 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
     buildFeatures {
         compose = true
         viewBinding = true
-    }
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.8"
     }
     sourceSets.getByName("main").assets.srcDir(testClientAssets)
 }
@@ -94,6 +94,10 @@ dependencies {
     // Security
     implementation("androidx.security:security-crypto-ktx:1.1.0-alpha06")
 
+    // Hilt DI
+    implementation("com.google.dagger:hilt-android:2.55")
+    kapt("com.google.dagger:hilt-android-compiler:2.55")
+
     // Testing
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
@@ -101,4 +105,7 @@ dependencies {
     androidTestImplementation("androidx.compose.ui:ui-test-junit4:1.6.2")
     debugImplementation("androidx.compose.ui:ui-tooling:1.6.2")
     debugImplementation("androidx.compose.ui:ui-test-manifest:1.6.2")
+}
+
+dependencies {
 }

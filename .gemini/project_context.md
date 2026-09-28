@@ -53,3 +53,15 @@ MobPlayer TV is a local-network Android TV application. It acts as a headless me
 - The `BindException` caused by network switches has been resolved.
 - FGS (Foreground Service) permissions for Android 14 have been fixed.
 - SLF4J logger implementation has been added.
+- **Minimum SDK bumped to 26**: Obsolete API version checks (`Build.VERSION.SDK_INT >= O`) have been removed.
+- **Unstable APIs Removed**: Replaced experimental `androidx.tv` Material 3 components with standard Compose `MaterialTheme` and removed `DefaultLoadControl` custom `@UnstableApi` in `MediaManager`.
+- **Media Polling**: `MediaManager` now correctly polls `player.currentPosition` every 1 second while playing, which automatically broadcasts updates to the TV UI and WebSocket clients via `playerStateFlow`.
+
+## Planned Architectural Refactoring (Anti-Pattern Migration)
+Currently, `ServerEventBus` and `MediaManager` are implemented as global Kotlin `object` singletons. This acts as a pragmatic bridge between the `WebSocketServerService` and `MainActivity`, bypassing complex Android lifecycles.
+
+However, to scale this into a production-level enterprise application, a **~15 file refactoring** is planned to migrate to a standard Dependency Injection architecture:
+1. **Hilt Setup**: Add Dagger Hilt plugins and a `@HiltAndroidApp` Application class.
+2. **Repositories**: Convert the singletons into `ServerRepository` and `MediaRepository` provided via a Hilt module.
+3. **ViewModels**: Implement `TvMainViewModel` (replacing the unused `ServerStateViewModel`) to observe the repositories and expose state flows to the Compose UI.
+4. **Service Injection**: Update `WebSocketServerService` and `KtorServerManager` to accept the repositories via constructor injection.

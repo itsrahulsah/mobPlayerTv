@@ -33,9 +33,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.ui.PlayerView
-import androidx.tv.material3.ExperimentalTvMaterial3Api
-import androidx.tv.material3.MaterialTheme
-import com.mobplayer.tv.media.MediaManager
+import androidx.compose.material3.MaterialTheme
+
 import com.mobplayer.tv.models.RemoteActionEvent
 import com.mobplayer.tv.models.RemoteIconType
 import com.mobplayer.tv.service.WebSocketServerService
@@ -44,24 +43,33 @@ import com.mobplayer.tv.ui.components.TvVideoPlayerOverlay
 import com.mobplayer.tv.ui.home.TvHomeScreen
 import com.mobplayer.tv.ui.pairing.TvPairingScreen
 import com.mobplayer.tv.ui.theme.TvColors
+import androidx.activity.viewModels
+import dagger.hilt.android.AndroidEntryPoint
+import com.mobplayer.tv.viewmodel.TvMainViewModel
 import com.mobplayer.tv.viewmodel.ConnectionEvent
-import com.mobplayer.tv.viewmodel.ServerEventBus
 
-@OptIn(ExperimentalTvMaterial3Api::class)
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    private val viewModel: TvMainViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val player = MediaManager.initialize(this)
+        val player = viewModel.initializePlayer()
 
         // Setup D-pad key event injection from mobile controller
-        ServerEventBus.onInjectKeyEvent = { keyCode ->
+        viewModel.serverRepository.onInjectKeyEvent = { keyCode ->
             val sendEvent = {
-                val now = SystemClock.uptimeMillis()
-                val down = KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0)
-                val up = KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0)
-                dispatchKeyEvent(down)
-                dispatchKeyEvent(up)
+                if (keyCode == KeyEvent.KEYCODE_BACK) {
+                    onBackPressedDispatcher.onBackPressed()
+                } else {
+                    val now = SystemClock.uptimeMillis()
+                    val down = KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0)
+                    val up = KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0)
+                    dispatchKeyEvent(down)
+                    dispatchKeyEvent(up)
+                }
             }
             if (Looper.myLooper() == Looper.getMainLooper()) {
                 sendEvent()
@@ -72,23 +80,19 @@ class MainActivity : ComponentActivity() {
 
         // Start the WebSocket Ktor Service
         Intent(this, WebSocketServerService::class.java).also { intent ->
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(intent)
-            } else {
-                startService(intent)
-            }
+            startForegroundService(intent)
         }
 
         setContent {
-            val connectionEvent by ServerEventBus.connectionEvent.collectAsState()
-            val connectedDeviceName by ServerEventBus.connectedDeviceName.collectAsState()
-            val activeMediaTitle by ServerEventBus.activeMediaTitle.collectAsState()
-            val isPlayerActive by ServerEventBus.isPlayerActive.collectAsState()
+            val connectionEvent by viewModel.connectionEvent.collectAsState()
+            val connectedDeviceName by viewModel.serverRepository.connectedDeviceName.collectAsState()
+            val activeMediaTitle by viewModel.serverRepository.activeMediaTitle.collectAsState()
+            val isPlayerActive by viewModel.serverRepository.isPlayerActive.collectAsState()
 
             // Remote Back button handler: return to TV Home if player is active
             BackHandler(enabled = isPlayerActive) {
-                ServerEventBus.closePlayer()
-                MediaManager.stop()
+                viewModel.serverRepository.closePlayer()
+                viewModel.mediaRepository.stop()
             }
 
             MaterialTheme {
@@ -106,7 +110,7 @@ class MainActivity : ComponentActivity() {
                                 port = event.port,
                                 isEmulator = event.isEmulator,
                                 onEnterDemoMode = {
-                                    ServerEventBus.enterDemoMode()
+                                    viewModel.serverRepository.enterDemoMode()
                                 }
                             )
                         }
@@ -141,11 +145,12 @@ class MainActivity : ComponentActivity() {
                                         )
 
                                         TvVideoPlayerOverlay(
+                                            viewModel = viewModel,
                                             title = activeMediaTitle,
                                             connectedDeviceName = connectedDeviceName,
                                             onBackToHome = {
-                                                ServerEventBus.closePlayer()
-                                                MediaManager.stop()
+                                                viewModel.serverRepository.closePlayer()
+                                                viewModel.mediaRepository.stop()
                                             }
                                         )
                                     }
@@ -154,9 +159,9 @@ class MainActivity : ComponentActivity() {
                                     TvHomeScreen(
                                         connectedDeviceName = connectedDeviceName,
                                         onPlayMedia = { item ->
-                                            ServerEventBus.openPlayer(item.title)
-                                            MediaManager.loadMedia(item.videoUrl)
-                                            ServerEventBus.postRemoteAction(
+                                            viewModel.serverRepository.openPlayer(item.title)
+                                            viewModel.mediaRepository.loadMedia(item.videoUrl)
+                                            viewModel.serverRepository.postRemoteAction(
                                                 RemoteActionEvent(
                                                     action = "PLAY",
                                                     displayName = getString(R.string.action_playing, item.title),
@@ -166,11 +171,11 @@ class MainActivity : ComponentActivity() {
                                             )
                                         },
                                         onDisconnect = {
-                                            ServerEventBus.closePlayer()
-                                            MediaManager.stop()
-                                            ServerEventBus.closeActiveSession()
-                                            ServerEventBus.onClientDisconnected()
-                                            ServerEventBus.requestPin()
+                                            viewModel.serverRepository.closePlayer()
+                                            viewModel.mediaRepository.stop()
+                                            viewModel.serverRepository.closeActiveSession()
+                                            viewModel.serverRepository.onClientDisconnected()
+                                            viewModel.serverRepository.requestPin()
                                         }
                                     )
                                 }
@@ -179,16 +184,16 @@ class MainActivity : ComponentActivity() {
                     }
 
                     // Floating Remote Action HUD (renders on top of all screens)
-                    TvRemoteActionHud()
+                    TvRemoteActionHud(viewModel = viewModel)
                 }
             }
         }
     }
 
     override fun onDestroy() {
-        ServerEventBus.onInjectKeyEvent = null
+        viewModel.serverRepository.onInjectKeyEvent = null
         if (!isChangingConfigurations) {
-            MediaManager.release()
+            viewModel.mediaRepository.release()
             stopService(Intent(this, WebSocketServerService::class.java))
         }
         super.onDestroy()

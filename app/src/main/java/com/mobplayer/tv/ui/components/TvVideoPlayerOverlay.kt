@@ -37,18 +37,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mobplayer.tv.R
-import com.mobplayer.tv.media.MediaManager
+import com.mobplayer.tv.viewmodel.TvMainViewModel
 import com.mobplayer.tv.ui.theme.TvColors
 import kotlinx.coroutines.delay
 
 @Composable
 fun TvVideoPlayerOverlay(
+    viewModel: TvMainViewModel,
     title: String,
     connectedDeviceName: String?,
     onBackToHome: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val playerState by MediaManager.playerStateFlow.collectAsState()
+    val playerState by viewModel.mediaRepository.playerStateFlow.collectAsState()
     var isOverlayVisible by remember { mutableStateOf(true) }
     var interactionTrigger by remember { mutableIntStateOf(0) }
     val focusRequester = remember { FocusRequester() }
@@ -234,7 +235,7 @@ fun TvVideoPlayerOverlay(
                             .background(Color.White.copy(alpha = 0.2f))
                             .border(1.dp, Color.White.copy(alpha = 0.5f), CircleShape)
                             .clickable {
-                                if (isPlaying) MediaManager.pause() else MediaManager.play()
+                                if (isPlaying) viewModel.mediaRepository.pause() else viewModel.mediaRepository.play()
                             },
                         contentAlignment = Alignment.Center
                     ) {

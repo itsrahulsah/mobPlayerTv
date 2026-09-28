@@ -4,13 +4,14 @@ import android.content.Context
 import android.util.Log
 import android.view.KeyEvent
 import com.mobplayer.tv.auth.AuthManager
-import com.mobplayer.tv.media.MediaManager
+import com.mobplayer.tv.repository.MediaRepository
 import com.mobplayer.tv.models.PlayerCommandPayload
 import com.mobplayer.tv.models.RemoteActionEvent
 import com.mobplayer.tv.models.RemoteIconType
 import com.mobplayer.tv.models.WebSocketMessage
 import com.mobplayer.tv.network.NetworkUtils
-import com.mobplayer.tv.viewmodel.ServerEventBus
+import com.mobplayer.tv.repository.ServerRepository
+import dagger.hilt.android.qualifiers.ApplicationContext
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.server.application.call
@@ -36,10 +37,17 @@ import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.time.Duration
+import javax.inject.Inject
+import javax.inject.Singleton
 
-class KtorServerManager(private val context: Context) {
+@Singleton
+class KtorServerManager @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val authManager: AuthManager,
+    private val serverRepository: ServerRepository,
+    private val mediaRepository: MediaRepository
+) {
     private var server: ApplicationEngine? = null
-    private val authManager = AuthManager(context)
 
     // Maintain a single active controller session
     private var activeSession: DefaultWebSocketSession? = null
@@ -78,7 +86,7 @@ class KtorServerManager(private val context: Context) {
                     val clientInfo = this.call.request.local.let { "${it.remoteHost}:${it.serverPort}" }
                     Log.i("RemoteEvent", "==================================================")
                     Log.i("RemoteEvent", "🌐 [Client Connected] WebSocket connection established from: $clientInfo")
-                    ServerEventBus.logRemoteEvent("Connection", "Client connected from $clientInfo")
+                    serverRepository.logRemoteEvent("Connection", "Client connected from $clientInfo")
 
                     try {
                         handleClientConnection(this)
@@ -90,8 +98,8 @@ class KtorServerManager(private val context: Context) {
                         if (activeSession == this) {
                             activeSession = null
                             Log.i("RemoteEvent", "🔌 [Active Controller Disconnected] Showing pairing PIN again")
-                            ServerEventBus.onClientDisconnected()
-                            ServerEventBus.showPin(currentPin)
+                            serverRepository.onClientDisconnected()
+                            serverRepository.showPin(currentPin)
                         }
                     }
                 }
@@ -112,20 +120,20 @@ class KtorServerManager(private val context: Context) {
             Log.i("RemoteEvent", "   • Android Emulator: Run 'adb forward tcp:$port tcp:$port' on PC")
         }
         Log.i("RemoteEvent", "==================================================")
-        ServerEventBus.logRemoteEvent("Server", "🚀 Socket server UP at IP: $displayIp, Port: $port | Endpoint: $wsEndpoint")
+        serverRepository.logRemoteEvent("Server", "🚀 Socket server UP at IP: $displayIp, Port: $port | Endpoint: $wsEndpoint")
 
-        ServerEventBus.onRequestNewPin = {
+        serverRepository.onRequestNewPin = {
             currentPin = authManager.generatePin()
             currentPin
         }
 
-        ServerEventBus.onCloseSession = {
+        serverRepository.onCloseSession = {
             closeActiveSession()
         }
 
         // Show PIN on TV on startup
         currentPin = authManager.generatePin()
-        ServerEventBus.showPin(currentPin)
+        serverRepository.showPin(currentPin)
     }
 
     private suspend fun handleClientConnection(session: DefaultWebSocketSession) {
@@ -176,7 +184,7 @@ class KtorServerManager(private val context: Context) {
                             if (authManager.verifyPin(currentPin, message.payload.trim())) {
                                 isAuthenticated = true
                                 Log.i("RemoteEvent", "✅ PIN matched! Authentication successful.")
-                                ServerEventBus.hideDialogs()
+                                serverRepository.hideDialogs()
                                 val token = authManager.generateAndSaveToken()
                                 session.send(Frame.Text(json.encodeToString(WebSocketMessage("AUTH_SUCCESS", token))))
                                 handleAuthenticatedSession(session)
@@ -271,35 +279,35 @@ class KtorServerManager(private val context: Context) {
         withContext(Dispatchers.Main.immediate) {
             when (action) {
                 "PLAY", "RESUME" -> {
-                    MediaManager.play()
-                    val title = ServerEventBus.activeMediaTitle.value.ifEmpty { "Streaming Media" }
-                    ServerEventBus.openPlayer(title)
-                    ServerEventBus.postRemoteAction(
+                    mediaRepository.play()
+                    val title = serverRepository.activeMediaTitle.value.ifEmpty { "Streaming Media" }
+                    serverRepository.openPlayer(title)
+                    serverRepository.postRemoteAction(
                         RemoteActionEvent("PLAY", "Playing", "Playback started", RemoteIconType.PLAY)
                     )
                     Log.i("RemoteEvent", "▶ [Action Complete] PLAY executed")
                 }
 
                 "PAUSE" -> {
-                    MediaManager.pause()
-                    ServerEventBus.postRemoteAction(
+                    mediaRepository.pause()
+                    serverRepository.postRemoteAction(
                         RemoteActionEvent("PAUSE", "Paused", "Playback paused", RemoteIconType.PAUSE)
                     )
                     Log.i("RemoteEvent", "⏸ [Action Complete] PAUSE executed")
                 }
 
                 "TOGGLE_PLAY_PAUSE", "PLAY_PAUSE" -> {
-                    val isPlaying = MediaManager.player?.isPlaying == true
+                    val isPlaying = mediaRepository.player?.isPlaying == true
                     if (isPlaying) {
-                        MediaManager.pause()
-                        ServerEventBus.postRemoteAction(
+                        mediaRepository.pause()
+                        serverRepository.postRemoteAction(
                             RemoteActionEvent("PAUSE", "Paused", "Playback paused", RemoteIconType.PAUSE)
                         )
                     } else {
-                        MediaManager.play()
-                        val title = ServerEventBus.activeMediaTitle.value.ifEmpty { "Streaming Media" }
-                        ServerEventBus.openPlayer(title)
-                        ServerEventBus.postRemoteAction(
+                        mediaRepository.play()
+                        val title = serverRepository.activeMediaTitle.value.ifEmpty { "Streaming Media" }
+                        serverRepository.openPlayer(title)
+                        serverRepository.postRemoteAction(
                             RemoteActionEvent("PLAY", "Playing", "Playback started", RemoteIconType.PLAY)
                         )
                     }
@@ -307,9 +315,9 @@ class KtorServerManager(private val context: Context) {
                 }
 
                 "STOP" -> {
-                    MediaManager.stop()
-                    ServerEventBus.closePlayer()
-                    ServerEventBus.postRemoteAction(
+                    mediaRepository.stop()
+                    serverRepository.closePlayer()
+                    serverRepository.postRemoteAction(
                         RemoteActionEvent("STOP", "Stopped", "Returned to TV Home", RemoteIconType.HOME)
                     )
                     Log.i("RemoteEvent", "⏹ [Action Complete] STOP executed")
@@ -317,28 +325,28 @@ class KtorServerManager(private val context: Context) {
 
                 "SEEK" -> {
                     val seekTo = payload?.seekToMs ?: payload?.positionMs ?: 0L
-                    MediaManager.seekTo(seekTo)
-                    ServerEventBus.postRemoteAction(
+                    mediaRepository.seekTo(seekTo)
+                    serverRepository.postRemoteAction(
                         RemoteActionEvent("SEEK", "Seek", formatTime(seekTo), RemoteIconType.SEEK_FORWARD)
                     )
                     Log.i("RemoteEvent", "⏩ [Action Complete] SEEK to ${seekTo}ms executed")
                 }
 
                 "SEEK_FORWARD", "FORWARD", "FAST_FORWARD" -> {
-                    val currentPos = MediaManager.player?.currentPosition ?: 0L
+                    val currentPos = mediaRepository.player?.currentPosition ?: 0L
                     val newPos = currentPos + 10_000L
-                    MediaManager.seekTo(newPos)
-                    ServerEventBus.postRemoteAction(
+                    mediaRepository.seekTo(newPos)
+                    serverRepository.postRemoteAction(
                         RemoteActionEvent("SEEK_FORWARD", "Forward +10s", formatTime(newPos), RemoteIconType.SEEK_FORWARD)
                     )
                     Log.i("RemoteEvent", "⏩ [Action Complete] SEEK_FORWARD (+10s to ${newPos}ms)")
                 }
 
                 "SEEK_BACKWARD", "REWIND", "BACKWARD" -> {
-                    val currentPos = MediaManager.player?.currentPosition ?: 0L
+                    val currentPos = mediaRepository.player?.currentPosition ?: 0L
                     val newPos = (currentPos - 10_000L).coerceAtLeast(0L)
-                    MediaManager.seekTo(newPos)
-                    ServerEventBus.postRemoteAction(
+                    mediaRepository.seekTo(newPos)
+                    serverRepository.postRemoteAction(
                         RemoteActionEvent("SEEK_BACKWARD", "Rewind -10s", formatTime(newPos), RemoteIconType.SEEK_BACKWARD)
                     )
                     Log.i("RemoteEvent", "⏪ [Action Complete] SEEK_BACKWARD (-10s to ${newPos}ms)")
@@ -346,46 +354,46 @@ class KtorServerManager(private val context: Context) {
 
                 "SET_VOLUME" -> {
                     val vol = (payload?.volume ?: 0.5f).coerceIn(0f, 1f)
-                    MediaManager.setVolume(vol)
-                    ServerEventBus.postRemoteAction(
+                    mediaRepository.setVolume(vol)
+                    serverRepository.postRemoteAction(
                         RemoteActionEvent("SET_VOLUME", "Volume ${(vol * 100).toInt()}%", null, RemoteIconType.VOLUME_UP)
                     )
                     Log.i("RemoteEvent", "🔊 [Action Complete] SET_VOLUME: $vol")
                 }
 
                 "VOLUME_UP" -> {
-                    val curVol = MediaManager.player?.volume ?: 1f
+                    val curVol = mediaRepository.player?.volume ?: 1f
                     val newVol = (curVol + 0.05f).coerceAtMost(1f)
-                    MediaManager.setVolume(newVol)
-                    ServerEventBus.postRemoteAction(
+                    mediaRepository.setVolume(newVol)
+                    serverRepository.postRemoteAction(
                         RemoteActionEvent("VOLUME_UP", "Volume ${(newVol * 100).toInt()}%", null, RemoteIconType.VOLUME_UP)
                     )
                     Log.i("RemoteEvent", "🔊 [Action Complete] VOLUME_UP: $newVol")
                 }
 
                 "VOLUME_DOWN" -> {
-                    val curVol = MediaManager.player?.volume ?: 1f
+                    val curVol = mediaRepository.player?.volume ?: 1f
                     val newVol = (curVol - 0.05f).coerceAtLeast(0f)
-                    MediaManager.setVolume(newVol)
-                    ServerEventBus.postRemoteAction(
+                    mediaRepository.setVolume(newVol)
+                    serverRepository.postRemoteAction(
                         RemoteActionEvent("VOLUME_DOWN", "Volume ${(newVol * 100).toInt()}%", null, RemoteIconType.VOLUME_DOWN)
                     )
                     Log.i("RemoteEvent", "🔉 [Action Complete] VOLUME_DOWN: $newVol")
                 }
 
                 "MUTE" -> {
-                    val curVol = MediaManager.player?.volume ?: 1f
+                    val curVol = mediaRepository.player?.volume ?: 1f
                     if (curVol > 0f) {
                         lastNonZeroVolume = curVol
-                        MediaManager.setVolume(0f)
-                        ServerEventBus.postRemoteAction(
+                        mediaRepository.setVolume(0f)
+                        serverRepository.postRemoteAction(
                             RemoteActionEvent("MUTE", "Muted", "Volume 0%", RemoteIconType.MUTE)
                         )
                         Log.i("RemoteEvent", "🔇 [Action Complete] MUTED")
                     } else {
                         val restoreVol = if (lastNonZeroVolume > 0f) lastNonZeroVolume else 0.8f
-                        MediaManager.setVolume(restoreVol)
-                        ServerEventBus.postRemoteAction(
+                        mediaRepository.setVolume(restoreVol)
+                        serverRepository.postRemoteAction(
                             RemoteActionEvent("UNMUTE", "Unmuted", "Volume ${(restoreVol * 100).toInt()}%", RemoteIconType.VOLUME_UP)
                         )
                         Log.i("RemoteEvent", "🔊 [Action Complete] UNMUTED to $restoreVol")
@@ -394,73 +402,73 @@ class KtorServerManager(private val context: Context) {
 
                 // D-Pad Navigation Keys: navigate immediately without HUD animation lag
                 "DPAD_UP", "UP" -> {
-                    ServerEventBus.injectKey(KeyEvent.KEYCODE_DPAD_UP)
+                    serverRepository.injectKey(KeyEvent.KEYCODE_DPAD_UP)
                     Log.i("RemoteEvent", "▲ [Action Complete] DPAD_UP injected")
                 }
 
                 "DPAD_DOWN", "DOWN" -> {
-                    ServerEventBus.injectKey(KeyEvent.KEYCODE_DPAD_DOWN)
+                    serverRepository.injectKey(KeyEvent.KEYCODE_DPAD_DOWN)
                     Log.i("RemoteEvent", "▼ [Action Complete] DPAD_DOWN injected")
                 }
 
                 "DPAD_LEFT", "LEFT" -> {
-                    if (ServerEventBus.isPlayerActive.value) {
-                        val currentPos = MediaManager.player?.currentPosition ?: 0L
+                    if (serverRepository.isPlayerActive.value) {
+                        val currentPos = mediaRepository.player?.currentPosition ?: 0L
                         val newPos = (currentPos - 10_000L).coerceAtLeast(0L)
-                        MediaManager.seekTo(newPos)
-                        ServerEventBus.postRemoteAction(
+                        mediaRepository.seekTo(newPos)
+                        serverRepository.postRemoteAction(
                             RemoteActionEvent("SEEK_BACKWARD", "Rewind -10s", formatTime(newPos), RemoteIconType.SEEK_BACKWARD)
                         )
                     } else {
-                        ServerEventBus.injectKey(KeyEvent.KEYCODE_DPAD_LEFT)
+                        serverRepository.injectKey(KeyEvent.KEYCODE_DPAD_LEFT)
                     }
                     Log.i("RemoteEvent", "◄ [Action Complete] DPAD_LEFT handled")
                 }
 
                 "DPAD_RIGHT", "RIGHT" -> {
-                    if (ServerEventBus.isPlayerActive.value) {
-                        val currentPos = MediaManager.player?.currentPosition ?: 0L
+                    if (serverRepository.isPlayerActive.value) {
+                        val currentPos = mediaRepository.player?.currentPosition ?: 0L
                         val newPos = currentPos + 10_000L
-                        MediaManager.seekTo(newPos)
-                        ServerEventBus.postRemoteAction(
+                        mediaRepository.seekTo(newPos)
+                        serverRepository.postRemoteAction(
                             RemoteActionEvent("SEEK_FORWARD", "Forward +10s", formatTime(newPos), RemoteIconType.SEEK_FORWARD)
                         )
                     } else {
-                        ServerEventBus.injectKey(KeyEvent.KEYCODE_DPAD_RIGHT)
+                        serverRepository.injectKey(KeyEvent.KEYCODE_DPAD_RIGHT)
                     }
                     Log.i("RemoteEvent", "► [Action Complete] DPAD_RIGHT handled")
                 }
 
                 "DPAD_CENTER", "SELECT", "ENTER", "OK" -> {
-                    if (ServerEventBus.isPlayerActive.value) {
-                        val isPlaying = MediaManager.player?.isPlaying == true
+                    if (serverRepository.isPlayerActive.value) {
+                        val isPlaying = mediaRepository.player?.isPlaying == true
                         if (isPlaying) {
-                            MediaManager.pause()
-                            ServerEventBus.postRemoteAction(
+                            mediaRepository.pause()
+                            serverRepository.postRemoteAction(
                                 RemoteActionEvent("PAUSE", "Paused", "Playback paused", RemoteIconType.PAUSE)
                             )
                         } else {
-                            MediaManager.play()
-                            ServerEventBus.postRemoteAction(
+                            mediaRepository.play()
+                            serverRepository.postRemoteAction(
                                 RemoteActionEvent("PLAY", "Playing", "Playback resumed", RemoteIconType.PLAY)
                             )
                         }
                     } else {
-                        ServerEventBus.injectKey(KeyEvent.KEYCODE_DPAD_CENTER)
+                        serverRepository.injectKey(KeyEvent.KEYCODE_DPAD_CENTER)
                     }
                     Log.i("RemoteEvent", "🔘 [Action Complete] DPAD_CENTER / SELECT handled")
                 }
 
                 "BACK" -> {
-                    if (ServerEventBus.isPlayerActive.value) {
-                        MediaManager.stop()
-                        ServerEventBus.closePlayer()
-                        ServerEventBus.postRemoteAction(
+                    if (serverRepository.isPlayerActive.value) {
+                        mediaRepository.stop()
+                        serverRepository.closePlayer()
+                        serverRepository.postRemoteAction(
                             RemoteActionEvent("BACK", "Exit to TV Home", null, RemoteIconType.BACK)
                         )
                     } else {
-                        ServerEventBus.injectKey(KeyEvent.KEYCODE_BACK)
-                        ServerEventBus.postRemoteAction(
+                        serverRepository.injectKey(KeyEvent.KEYCODE_BACK)
+                        serverRepository.postRemoteAction(
                             RemoteActionEvent("BACK", "↩ Back", null, RemoteIconType.BACK)
                         )
                     }
@@ -468,9 +476,9 @@ class KtorServerManager(private val context: Context) {
                 }
 
                 "HOME" -> {
-                    MediaManager.stop()
-                    ServerEventBus.closePlayer()
-                    ServerEventBus.postRemoteAction(
+                    mediaRepository.stop()
+                    serverRepository.closePlayer()
+                    serverRepository.postRemoteAction(
                         RemoteActionEvent("HOME", "🏠 TV Home", null, RemoteIconType.HOME)
                     )
                     Log.i("RemoteEvent", "🏠 [Action Complete] HOME handled")
@@ -478,7 +486,7 @@ class KtorServerManager(private val context: Context) {
 
                 else -> {
                     Log.w("RemoteEvent", "⚠️ Unhandled action command: '$action'")
-                    ServerEventBus.postRemoteAction(
+                    serverRepository.postRemoteAction(
                         RemoteActionEvent(action, action, "Remote Action", RemoteIconType.INFO)
                     )
                 }
@@ -504,9 +512,9 @@ class KtorServerManager(private val context: Context) {
         Log.i("RemoteEvent", "🎬 [Loading Media] URL='$url', Title='$title'")
 
         withContext(Dispatchers.Main.immediate) {
-            ServerEventBus.openPlayer(title)
-            MediaManager.loadMedia(url)
-            ServerEventBus.postRemoteAction(
+            serverRepository.openPlayer(title)
+            mediaRepository.loadMedia(url)
+            serverRepository.postRemoteAction(
                 RemoteActionEvent("LOAD_MEDIA", "🎬 Loading Media", title, RemoteIconType.MEDIA)
             )
         }
@@ -535,7 +543,7 @@ class KtorServerManager(private val context: Context) {
 
         if (keyCode != KeyEvent.KEYCODE_UNKNOWN) {
             withContext(Dispatchers.Main.immediate) {
-                ServerEventBus.injectKey(keyCode)
+                serverRepository.injectKey(keyCode)
             }
             CoroutineScope(Dispatchers.IO).launch {
                 try {
@@ -560,7 +568,7 @@ class KtorServerManager(private val context: Context) {
         if (activeSession != null && activeSession != session) {
             // Another controller is already active, prompt UI
             val allowed = CompletableDeferred<Boolean>()
-            ServerEventBus.promptConnectionConflict("A new device") { result ->
+            serverRepository.promptConnectionConflict("A new device") { result ->
                 allowed.complete(result)
             }
 
@@ -568,7 +576,7 @@ class KtorServerManager(private val context: Context) {
                 activeSession?.close()
                 activeSession = session
                 startStateBroadcast(session)
-                ServerEventBus.onClientConnected("Mobile Controller")
+                serverRepository.onClientConnected("Mobile Controller")
             } else {
                 session.send(Frame.Text(json.encodeToString(WebSocketMessage("AUTH_FAILED", "Connection rejected by TV"))))
                 session.close()
@@ -577,15 +585,15 @@ class KtorServerManager(private val context: Context) {
         } else {
             activeSession = session
             startStateBroadcast(session)
-            ServerEventBus.hideDialogs()
-            ServerEventBus.onClientConnected("Mobile Controller")
+            serverRepository.hideDialogs()
+            serverRepository.onClientConnected("Mobile Controller")
         }
     }
 
     private fun startStateBroadcast(session: DefaultWebSocketSession) {
         stateBroadcastJob?.cancel()
         stateBroadcastJob = CoroutineScope(Dispatchers.IO).launch {
-            MediaManager.playerStateFlow.collect { state ->
+            mediaRepository.playerStateFlow.collect { state ->
                 state?.let {
                     val payload = json.encodeToString(it)
                     val message = WebSocketMessage("STATE_UPDATE", payload)
@@ -616,8 +624,8 @@ class KtorServerManager(private val context: Context) {
     }
 
     fun stopServer() {
-        ServerEventBus.onRequestNewPin = null
-        ServerEventBus.onCloseSession = null
+        serverRepository.onRequestNewPin = null
+        serverRepository.onCloseSession = null
         closeActiveSession()
         server?.stop(1_000, 2_000)
         server = null

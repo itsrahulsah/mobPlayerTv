@@ -29,15 +29,15 @@ import com.mobplayer.tv.R
 import com.mobplayer.tv.models.RemoteActionEvent
 import com.mobplayer.tv.models.RemoteIconType
 import com.mobplayer.tv.ui.theme.TvColors
-import com.mobplayer.tv.viewmodel.ServerEventBus
-
+import com.mobplayer.tv.viewmodel.TvMainViewModel
 import androidx.compose.animation.core.tween
 
 @Composable
 fun TvRemoteActionHud(
+    viewModel: TvMainViewModel,
     modifier: Modifier = Modifier
 ) {
-    val currentEvent by ServerEventBus.remoteActionEvent.collectAsState()
+    val currentEvent by viewModel.remoteActionEvent.collectAsState()
 
     Box(
         modifier = modifier

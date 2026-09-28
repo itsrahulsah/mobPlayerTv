@@ -15,13 +15,17 @@ import com.mobplayer.tv.network.NetworkStateMonitor
 import com.mobplayer.tv.network.NetworkUtils
 import com.mobplayer.tv.network.NsdHelper
 import com.mobplayer.tv.server.KtorServerManager
-import com.mobplayer.tv.viewmodel.ServerEventBus
+import com.mobplayer.tv.repository.ServerRepository
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class WebSocketServerService : Service() {
 
-    private lateinit var serverManager: KtorServerManager
-    private lateinit var nsdHelper: NsdHelper
-    private lateinit var networkMonitor: NetworkStateMonitor
+    @Inject lateinit var serverManager: KtorServerManager
+    @Inject lateinit var nsdHelper: NsdHelper
+    @Inject lateinit var networkMonitor: NetworkStateMonitor
+    @Inject lateinit var serverRepository: ServerRepository
 
     private val port = 8080
 
@@ -30,10 +34,6 @@ class WebSocketServerService : Service() {
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, createNotification())
         
-        serverManager = KtorServerManager(this)
-        nsdHelper = NsdHelper(this)
-        networkMonitor = NetworkStateMonitor(this)
-        
         // Start Ktor server exactly once. It binds to 0.0.0.0, so it handles IP changes automatically.
         serverManager.startServer(port = port)
 
@@ -41,7 +41,7 @@ class WebSocketServerService : Service() {
         val isEmulator = NetworkUtils.isEmulator()
         val displayIp = if (isEmulator) "10.0.2.2 (Local: $localIp)" else localIp
         Log.i(TAG, "🚀 [WebSocketServerService] Socket server UP on IP: $displayIp, Port: $port | Endpoint: ws://$localIp:$port/control (Emulator: $isEmulator)")
-        ServerEventBus.logRemoteEvent("Service", "Socket server UP on IP: $displayIp, Port: $port")
+        serverRepository.logRemoteEvent("Service", "Socket server UP on IP: $displayIp, Port: $port")
 
         // Register NSD broadcast immediately on service startup
         nsdHelper.registerService(port = port, serviceName = getString(R.string.app_name))
@@ -53,14 +53,14 @@ class WebSocketServerService : Service() {
             onNetworkAvailable = {
                 val newIp = NetworkUtils.getLocalIpAddress() ?: "0.0.0.0"
                 Log.i(TAG, "🌐 [Network Available] Socket server reachable on IP: $newIp, Port: $port | Endpoint: ws://$newIp:$port/control")
-                ServerEventBus.logRemoteEvent("Network", "Network connected. Socket server at ws://$newIp:$port/control")
+                serverRepository.logRemoteEvent("Network", "Network connected. Socket server at ws://$newIp:$port/control")
                 // Restart only the NSD broadcast
                 nsdHelper.tearDown()
                 nsdHelper.registerService(port = port, serviceName = getString(R.string.app_name))
             },
             onNetworkLost = {
                 Log.w(TAG, "⚠️ [Network Lost] Wi-Fi/Ethernet disconnected for socket server on port $port")
-                ServerEventBus.logRemoteEvent("Network", "Network disconnected for socket server on port $port")
+                serverRepository.logRemoteEvent("Network", "Network disconnected for socket server on port $port")
                 // Stop broadcasting if network is lost
                 nsdHelper.tearDown()
             }
@@ -88,15 +88,13 @@ class WebSocketServerService : Service() {
     }
 
     private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                getString(R.string.notification_channel_name),
-                NotificationManager.IMPORTANCE_LOW
-            )
-            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            manager.createNotificationChannel(channel)
-        }
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            getString(R.string.notification_channel_name),
+            NotificationManager.IMPORTANCE_LOW
+        )
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.createNotificationChannel(channel)
     }
 
     private fun createNotification(): Notification {
