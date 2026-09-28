@@ -61,11 +61,15 @@ class MainActivity : ComponentActivity() {
         // Setup D-pad key event injection from mobile controller
         viewModel.serverRepository.onInjectKeyEvent = { keyCode ->
             val sendEvent = {
-                val now = SystemClock.uptimeMillis()
-                val down = KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0)
-                val up = KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0)
-                dispatchKeyEvent(down)
-                dispatchKeyEvent(up)
+                if (keyCode == KeyEvent.KEYCODE_BACK) {
+                    onBackPressedDispatcher.onBackPressed()
+                } else {
+                    val now = SystemClock.uptimeMillis()
+                    val down = KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0)
+                    val up = KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0)
+                    dispatchKeyEvent(down)
+                    dispatchKeyEvent(up)
+                }
             }
             if (Looper.myLooper() == Looper.getMainLooper()) {
                 sendEvent()
