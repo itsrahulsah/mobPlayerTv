@@ -57,11 +57,28 @@ MobPlayer TV is a local-network Android TV application. It acts as a headless me
 - **Unstable APIs Removed**: Replaced experimental `androidx.tv` Material 3 components with standard Compose `MaterialTheme` and removed `DefaultLoadControl` custom `@UnstableApi` in `MediaManager`.
 - **Media Polling**: `MediaManager` now correctly polls `player.currentPosition` every 1 second while playing, which automatically broadcasts updates to the TV UI and WebSocket clients via `playerStateFlow`.
 
-## Planned Architectural Refactoring (Anti-Pattern Migration)
-Currently, `ServerEventBus` and `MediaManager` are implemented as global Kotlin `object` singletons. This acts as a pragmatic bridge between the `WebSocketServerService` and `MainActivity`, bypassing complex Android lifecycles.
+## Architecture & Core Components (Hilt DI)
+The project uses Dagger Hilt with constructor injection and clean repository pattern:
+1. **Network Discovery (`NsdHelper.kt`)**: Broadcasts service via Android `NsdManager`.
+2. **WebSocket Server (`KtorServerManager.kt` & `WebSocketServerService.kt`)**: Embedded Ktor CIO server on port 8080 handling WebSocket control commands and REST endpoints.
+3. **Authentication (`AuthManager.kt`)**: Generates 4-digit PINs, validates tokens via `EncryptedSharedPreferences`.
+4. **Media Playback (`MediaRepository.kt`)**: Wraps Media3/ExoPlayer, emits `playerStateFlow`, handles playback actions and progress polling.
+5. **Video Upload & Storage (`VideoUploadManager.kt`)**: 
+   - Manages local video storage in `context.filesDir/uploads/`.
+   - Handles progressive streaming (`ActiveUpload`) allowing ExoPlayer to start playing growing files within 1–2 seconds via `/api/stream/{uploadId}` while the remainder uploads in the background.
+   - Manages persistent metadata (`VideoMetadata`) including custom title, file size, duration, and last-played timestamp (`lastPlayedPositionMs`).
+   - Supports auto-resume: restores playback position when replaying stored videos.
+6. **UI & State (`MainActivity.kt`, `TvHomeScreen.kt`, `TvMainViewModel.kt`)**:
+   - Built with Jetpack Compose for TV.
+   - `TvHomeScreen.kt` displays content rails, including an "Uploaded Videos" rail using `CardType.CONTINUE_WATCHING` showing video titles and watch progress bars.
+   - `TvVideoPlayerOverlay.kt` renders player timeline and controls.
+   - `TvRemoteActionHud.kt` displays floating action pills on the TV screen.
 
-However, to scale this into a production-level enterprise application, a **~15 file refactoring** is planned to migrate to a standard Dependency Injection architecture:
-1. **Hilt Setup**: Add Dagger Hilt plugins and a `@HiltAndroidApp` Application class.
-2. **Repositories**: Convert the singletons into `ServerRepository` and `MediaRepository` provided via a Hilt module.
-3. **ViewModels**: Implement `TvMainViewModel` (replacing the unused `ServerStateViewModel`) to observe the repositories and expose state flows to the Compose UI.
-4. **Service Injection**: Update `WebSocketServerService` and `KtorServerManager` to accept the repositories via constructor injection.
+## Video Upload & Playback Resume REST Endpoints
+- `POST /api/upload`: Multipart upload with `playImmediately`, `title`, and progressive streaming.
+- `GET /api/stream/{uploadId}`: Progressive HTTP Range-capable stream for playing growing files.
+- `GET /api/videos`: List all stored videos with metadata and watch progress.
+- `GET /api/videos/{fileName}`: Direct streaming / downloading of stored video.
+- `POST /api/videos/{id}/play`: Play / Resume video at saved position.
+- `DELETE /api/videos/{id}` / `DELETE /api/videos`: Storage management and cleanup.
+

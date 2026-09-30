@@ -37,3 +37,21 @@
 
 ## Phase 6: Testing & Quality Assurance
 **Status: COMPLETED**
+
+---
+
+## Phase 7: Local Video Upload, Metadata & Playback Resume
+**Status: IN PLANNING / ARCHITECTURE DEFINED**
+- **Task 7.1:** Design and implement `VideoMetadata.kt` model with title, size, duration, and `lastPlayedPositionMs`.
+- **Task 7.2:** Implement `VideoUploadManager.kt` for local storage in `context.filesDir/uploads`, metadata persistence, and progressive growing-file buffer tracking (`ActiveUpload`).
+- **Task 7.3:** Implement Ktor REST routes in `KtorServerManager.kt`:
+  - `POST /api/upload`: multipart upload with progressive instant streaming.
+  - `GET /api/stream/{uploadId}`: HTTP Range progressive stream for ExoPlayer.
+  - `GET /api/videos`: list stored videos with watch progress.
+  - `POST /api/videos/{id}/play`: play/resume video.
+  - `DELETE /api/videos/{id}`: delete video and metadata.
+- **Task 7.4:** Wire `MediaRepository.kt` to track current position and update `lastPlayedPositionMs` in `VideoUploadManager`.
+- **Task 7.5:** Update `TvHomeScreen.kt` to display an "Uploaded Videos" rail using `CardType.CONTINUE_WATCHING` showing custom title, thumbnail, and watch progress bar.
+- **Task 7.6:** Update `test_client.html` with video file picker, editable title, fast-start detection, live upload progress, and stored videos library with `Resume` and `Start Over` buttons.
+- **Task 7.7:** Unit tests for `VideoUploadManager` and progressive stream tracking.
+

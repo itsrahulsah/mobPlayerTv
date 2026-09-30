@@ -8,25 +8,40 @@ import com.mobplayer.tv.repository.MediaRepository
 import com.mobplayer.tv.models.PlayerCommandPayload
 import com.mobplayer.tv.models.RemoteActionEvent
 import com.mobplayer.tv.models.RemoteIconType
+import com.mobplayer.tv.models.UploadResponse
+import com.mobplayer.tv.models.VideoMetadata
 import com.mobplayer.tv.models.WebSocketMessage
 import com.mobplayer.tv.network.NetworkUtils
 import com.mobplayer.tv.repository.ServerRepository
+import com.mobplayer.tv.storage.VideoUploadManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.content.PartData
+import io.ktor.http.content.forEachPart
 import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.ApplicationEngine
 import io.ktor.server.engine.embeddedServer
+import io.ktor.server.request.receiveMultipart
 import io.ktor.server.response.header
+import io.ktor.server.response.respond
+import io.ktor.server.response.respondFile
+import io.ktor.server.response.respondOutputStream
 import io.ktor.server.response.respondText
+import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
+import io.ktor.server.routing.options
+import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.pingPeriod
 import io.ktor.server.websocket.timeout
 import io.ktor.server.websocket.webSocket
+import io.ktor.utils.io.*
+import io.ktor.utils.io.core.*
 import io.ktor.websocket.CloseReason
 import io.ktor.websocket.DefaultWebSocketSession
 import io.ktor.websocket.Frame
@@ -36,6 +51,8 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import java.io.File
+import java.io.RandomAccessFile
 import java.time.Duration
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -45,7 +62,8 @@ class KtorServerManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val authManager: AuthManager,
     private val serverRepository: ServerRepository,
-    private val mediaRepository: MediaRepository
+    private val mediaRepository: MediaRepository,
+    private val videoUploadManager: VideoUploadManager
 ) {
     private var server: ApplicationEngine? = null
 
@@ -82,6 +100,252 @@ class KtorServerManager @Inject constructor(
                     }
                 }
 
+                // Preflight CORS handler for browser REST requests
+                options("/api/{...}") {
+                    call.response.header(HttpHeaders.AccessControlAllowOrigin, "*")
+                    call.response.header(HttpHeaders.AccessControlAllowMethods, "GET, POST, DELETE, OPTIONS")
+                    call.response.header(HttpHeaders.AccessControlAllowHeaders, "Content-Type, X-Auth-Token, X-Auth-PIN, Authorization, Range, X-File-Size")
+                    call.respond(HttpStatusCode.OK)
+                }
+
+                // 1. Upload video with optional progressive play-while-uploading
+                post("/api/upload") {
+                    call.response.header(HttpHeaders.AccessControlAllowOrigin, "*")
+                    val token = call.request.headers["X-Auth-Token"] ?: call.request.queryParameters["token"]
+                    if (token != null && !authManager.isValidToken(token)) {
+                        call.respond(HttpStatusCode.Unauthorized, "Invalid authentication token")
+                        return@post
+                    }
+
+                    val playParam = call.request.queryParameters["play"] ?: call.request.queryParameters["playImmediately"]
+                    var playImmediately = playParam?.toBooleanStrictOrNull() ?: true
+                    var customTitle: String? = call.request.queryParameters["title"]
+                    val totalSizeHeader = call.request.headers["X-File-Size"]?.toLongOrNull()
+                        ?: call.request.queryParameters["totalSize"]?.toLongOrNull() ?: 0L
+
+                    var activeUpload: VideoUploadManager.ActiveUpload? = null
+                    var initialPlaybackTriggered = false
+
+                    try {
+                        val multipart = call.receiveMultipart()
+                        multipart.forEachPart { part ->
+                            when (part) {
+                                is PartData.FormItem -> {
+                                    if (part.name == "title") customTitle = part.value
+                                    if (part.name == "play" || part.name == "playImmediately") {
+                                        playImmediately = part.value.toBooleanStrictOrNull() ?: playImmediately
+                                    }
+                                }
+                                is PartData.FileItem -> {
+                                    val originalName = part.originalFileName ?: "uploaded_video.mp4"
+                                    val upload = videoUploadManager.createActiveUpload(
+                                        originalFileName = originalName,
+                                        customTitle = customTitle,
+                                        totalSize = totalSizeHeader
+                                    )
+                                    activeUpload = upload
+                                    val channel = part.provider()
+                                    val buffer = ByteArray(65536)
+                                    while (true) {
+                                        val read = channel.readAvailable(buffer, 0, buffer.size)
+                                        if (read <= 0) break
+                                        videoUploadManager.writeChunk(upload.uploadId, buffer, read)
+
+                                        // Start playback once 3MB buffer is written if playImmediately is true
+                                        if (playImmediately && !initialPlaybackTriggered && upload.bytesWritten >= 3 * 1024 * 1024) {
+                                            initialPlaybackTriggered = true
+                                            val streamUrl = "http://127.0.0.1:$port/api/stream/${upload.uploadId}"
+                                            withContext(Dispatchers.Main.immediate) {
+                                                serverRepository.openPlayer(upload.metadata.title)
+                                                mediaRepository.loadMedia(streamUrl, 0L, upload.metadata.id)
+                                                serverRepository.postRemoteAction(
+                                                    RemoteActionEvent("LOAD_MEDIA", "🎬 Streaming", upload.metadata.title, RemoteIconType.MEDIA)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                                else -> Unit
+                            }
+                            part.dispose()
+                        }
+
+                        val finalUpload = activeUpload
+                        if (finalUpload != null) {
+                            val finalMeta = videoUploadManager.markUploadCompleted(finalUpload.uploadId)
+
+                            if (playImmediately && !initialPlaybackTriggered) {
+                                withContext(Dispatchers.Main.immediate) {
+                                    serverRepository.openPlayer(finalMeta.title)
+                                    mediaRepository.loadMedia("file://${finalUpload.file.absolutePath}", 0L, finalMeta.id)
+                                    serverRepository.postRemoteAction(
+                                        RemoteActionEvent("LOAD_MEDIA", "🎬 Playing", finalMeta.title, RemoteIconType.MEDIA)
+                                    )
+                                }
+                            }
+
+                            val response = UploadResponse(
+                                status = "success",
+                                uploadId = finalUpload.uploadId,
+                                fileName = finalMeta.fileName,
+                                title = finalMeta.title,
+                                size = finalMeta.fileSize,
+                                videoUrl = "/api/videos/${finalMeta.fileName}",
+                                streamUrl = "/api/stream/${finalUpload.uploadId}",
+                                playedImmediately = playImmediately
+                            )
+                            call.respondText(json.encodeToString(response), ContentType.Application.Json)
+                        } else {
+                            call.respond(HttpStatusCode.BadRequest, "No file uploaded")
+                        }
+                    } catch (e: Exception) {
+                        Log.e("RemoteEvent", "Error processing file upload: ${e.message}", e)
+                        activeUpload?.let { videoUploadManager.markUploadFailed(it.uploadId, e) }
+                        call.respond(HttpStatusCode.InternalServerError, "Upload failed: ${e.message}")
+                    }
+                }
+
+                // 2. Progressive HTTP streaming for growing files
+                get("/api/stream/{uploadId}") {
+                    call.response.header(HttpHeaders.AccessControlAllowOrigin, "*")
+                    val uploadId = call.parameters["uploadId"] ?: return@get call.respond(HttpStatusCode.BadRequest, "Missing upload ID")
+                    val upload = videoUploadManager.getActiveUpload(uploadId)
+                        ?: return@get call.respond(HttpStatusCode.NotFound, "Active upload stream not found")
+
+                    val rangeHeader = call.request.headers[HttpHeaders.Range]
+                    val totalLength = if (upload.totalSize > 0) upload.totalSize else upload.bytesWritten
+
+                    val (start, end) = if (rangeHeader != null && rangeHeader.startsWith("bytes=")) {
+                        val rangeSpec = rangeHeader.removePrefix("bytes=").trim()
+                        val parts = rangeSpec.split("-")
+                        val rStart = parts[0].toLongOrNull() ?: 0L
+                        val rEnd = if (parts.size > 1 && parts[1].isNotEmpty()) {
+                            parts[1].toLongOrNull() ?: (totalLength - 1).coerceAtLeast(0L)
+                        } else {
+                            (totalLength - 1).coerceAtLeast(0L)
+                        }
+                        Pair(rStart, rEnd)
+                    } else {
+                        Pair(0L, (totalLength - 1).coerceAtLeast(0L))
+                    }
+
+                    val statusCode = if (rangeHeader != null) HttpStatusCode.PartialContent else HttpStatusCode.OK
+                    val contentLength = (end - start + 1).coerceAtLeast(0L)
+
+                    call.response.header(HttpHeaders.AcceptRanges, "bytes")
+                    if (rangeHeader != null && totalLength > 0) {
+                        call.response.header(HttpHeaders.ContentRange, "bytes $start-$end/$totalLength")
+                    }
+
+                    call.respondOutputStream(
+                        contentType = ContentType.parse(upload.metadata.mimeType),
+                        status = statusCode,
+                        contentLength = if (contentLength > 0) contentLength else null
+                    ) {
+                        withContext(Dispatchers.IO) {
+                            val randomAccessFile = RandomAccessFile(upload.file, "r")
+                            try {
+                                randomAccessFile.seek(start)
+                                var currentPos = start
+                                val buffer = ByteArray(65536)
+
+                                while (currentPos <= end) {
+                                    val available = upload.bytesWritten
+                                    if (currentPos >= available) {
+                                        if (upload.isCompleted) break
+                                        if (upload.error != null) throw upload.error!!
+                                        delay(40)
+                                        continue
+                                    }
+
+                                    val toRead = minOf(buffer.size.toLong(), available - currentPos, end - currentPos + 1).toInt()
+                                    if (toRead <= 0) {
+                                        if (upload.isCompleted) break
+                                        delay(40)
+                                        continue
+                                    }
+
+                                    val read = randomAccessFile.read(buffer, 0, toRead)
+                                    if (read > 0) {
+                                        write(buffer, 0, read)
+                                        flush()
+                                        currentPos += read
+                                    } else {
+                                        if (upload.isCompleted) break
+                                        delay(40)
+                                    }
+                                }
+                            } finally {
+                                try { randomAccessFile.close() } catch (_: Exception) {}
+                            }
+                        }
+                    }
+                }
+
+                // 3. List all stored videos with watch progress
+                get("/api/videos") {
+                    call.response.header(HttpHeaders.AccessControlAllowOrigin, "*")
+                    val videos = videoUploadManager.uploadedVideosFlow.value
+                    call.respondText(json.encodeToString(videos), ContentType.Application.Json)
+                }
+
+                // 4. Stream or download completed video file
+                get("/api/videos/{fileName}") {
+                    call.response.header(HttpHeaders.AccessControlAllowOrigin, "*")
+                    val fileName = call.parameters["fileName"] ?: return@get call.respond(HttpStatusCode.BadRequest, "Missing filename")
+                    val file = videoUploadManager.getVideoFile(fileName)
+                    if (file != null && file.exists()) {
+                        call.respondFile(file)
+                    } else {
+                        call.respond(HttpStatusCode.NotFound, "Video not found")
+                    }
+                }
+
+                // 5. Play or resume previously uploaded video
+                post("/api/videos/{id}/play") {
+                    call.response.header(HttpHeaders.AccessControlAllowOrigin, "*")
+                    val id = call.parameters["id"] ?: return@post call.respond(HttpStatusCode.BadRequest, "Missing video ID")
+                    val meta = videoUploadManager.getVideoMetadata(id) ?: return@post call.respond(HttpStatusCode.NotFound, "Video not found")
+                    val file = videoUploadManager.getVideoFile(meta.fileName) ?: return@post call.respond(HttpStatusCode.NotFound, "Video file missing on TV")
+
+                    val resumeParam = call.request.queryParameters["resume"]?.toBooleanStrictOrNull() ?: true
+                    val startPos = if (resumeParam && !meta.isCompleted && meta.lastPlayedPositionMs > 5000L) {
+                        meta.lastPlayedPositionMs
+                    } else {
+                        0L
+                    }
+
+                    withContext(Dispatchers.Main.immediate) {
+                        serverRepository.openPlayer(meta.title)
+                        mediaRepository.loadMedia("file://${file.absolutePath}", startPos, meta.id)
+                        val resumeText = if (startPos > 0) " (Resumed)" else ""
+                        serverRepository.postRemoteAction(
+                            RemoteActionEvent("PLAY", "🎬 Playing$resumeText", meta.title, RemoteIconType.PLAY)
+                        )
+                    }
+
+                    call.respondText("{\"status\":\"success\",\"resumedAtMs\":$startPos}", ContentType.Application.Json)
+                }
+
+                // 6. Delete a specific video
+                delete("/api/videos/{id}") {
+                    call.response.header(HttpHeaders.AccessControlAllowOrigin, "*")
+                    val id = call.parameters["id"] ?: return@delete call.respond(HttpStatusCode.BadRequest, "Missing video ID")
+                    val deleted = videoUploadManager.deleteVideo(id)
+                    if (deleted) {
+                        call.respondText("{\"status\":\"success\",\"deleted\":true}", ContentType.Application.Json)
+                    } else {
+                        call.respond(HttpStatusCode.NotFound, "Video not found or already deleted")
+                    }
+                }
+
+                // 7. Clear all uploaded videos
+                delete("/api/videos") {
+                    call.response.header(HttpHeaders.AccessControlAllowOrigin, "*")
+                    val count = videoUploadManager.deleteAllVideos()
+                    call.respondText("{\"status\":\"success\",\"deletedCount\":$count}", ContentType.Application.Json)
+                }
+
                 webSocket("/control") {
                     val clientInfo = this.call.request.local.let { "${it.remoteHost}:${it.serverPort}" }
                     Log.i("RemoteEvent", "==================================================")
@@ -105,6 +369,16 @@ class KtorServerManager @Inject constructor(
                 }
             }
         }.start(wait = false)
+
+        // Connect media progress tracking and error listeners
+        mediaRepository.onPlaybackProgressUpdate = { id, pos, dur ->
+            videoUploadManager.updatePlaybackProgress(id, pos, dur)
+        }
+        mediaRepository.onPlaybackError = { error ->
+            serverRepository.postRemoteAction(
+                RemoteActionEvent("ERROR", "Playback Error", error.message ?: "Failed to play video", RemoteIconType.INFO)
+            )
+        }
 
         val isEmulator = NetworkUtils.isEmulator()
         val localIp = NetworkUtils.getLocalIpAddress() ?: "0.0.0.0"
@@ -624,6 +898,8 @@ class KtorServerManager @Inject constructor(
     }
 
     fun stopServer() {
+        mediaRepository.onPlaybackProgressUpdate = null
+        mediaRepository.onPlaybackError = null
         serverRepository.onRequestNewPin = null
         serverRepository.onCloseSession = null
         closeActiveSession()

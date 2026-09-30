@@ -300,3 +300,94 @@ The TV server continuously broadcasts playback status updates to the connected a
 | `LOAD_MEDIA` | Client -> TV | Video URL string | Load and auto-play new media item |
 | `COMMAND_SUCCESS` | TV -> Client | Action string | Acknowledgment of executed command |
 | `STATE_UPDATE` | TV -> Client | `{"isPlaying": Boolean, "positionMs": Long, "durationMs": Long, "volume": Float}` | Real-time state broadcast from ExoPlayer |
+
+---
+
+## 10. Video Upload, Metadata & Playback Resume HTTP API
+
+In addition to WebSocket control, the embedded Ktor server provides RESTful HTTP endpoints for uploading videos from client devices, progressive streaming (play-while-uploading), metadata persistence, and resuming playback.
+
+### 10.1. Upload Video (`POST /api/upload`)
+Uploads a local video file from the browser to TV internal app storage (`context.filesDir/uploads`). Supports progressive streaming: as soon as the initial buffer (~3-5 MB) is written, the TV automatically begins playing via the `/api/stream/{uploadId}` endpoint without waiting for the full upload to complete.
+
+- **Method**: `POST`
+- **Path**: `/api/upload`
+- **Headers**:
+  - `X-Auth-Token`: Client UUID auth token (or `?token=` query param).
+  - `Content-Type`: `multipart/form-data`
+- **Multipart Form Fields**:
+  - `file`: Video binary file payload (`video/mp4`, `video/webm`, `video/x-matroska`, etc.).
+  - `title`: Optional custom video title string (defaults to original filename).
+  - `playImmediately`: Optional boolean `"true"` or `"false"` (default: `"true"`).
+- **Response**: HTTP 200 JSON
+```json
+{
+  "status": "success",
+  "uploadId": "upload_1727715600",
+  "fileName": "1727715600_Vacation.mp4",
+  "title": "Summer Vacation",
+  "fileSize": 145281920,
+  "videoUrl": "/api/videos/1727715600_Vacation.mp4",
+  "streamUrl": "/api/stream/upload_1727715600",
+  "playedImmediately": true
+}
+```
+
+### 10.2. Progressive Stream (`GET /api/stream/{uploadId}`)
+Serves an active, growing video file while it is currently being uploaded. Supports HTTP Range requests (`bytes=start-end`) and streams bytes as they are written to disk. If playback catches up to the upload write pointer, it smoothly suspends until more chunks arrive.
+
+- **Method**: `GET`
+- **Path**: `/api/stream/{uploadId}`
+- **Headers**: Standard HTTP `Range: bytes=start-end` supported.
+- **Response**: HTTP 206 Partial Content / HTTP 200 with video stream.
+
+### 10.3. List Stored Videos with Watch Progress (`GET /api/videos`)
+Returns a JSON list of all stored videos on the TV along with their metadata, duration, last played position, and watch progress percentage.
+
+- **Method**: `GET`
+- **Path**: `/api/videos`
+- **Response**: HTTP 200 JSON
+```json
+[
+  {
+    "id": "vid_1727715600",
+    "fileName": "1727715600_Vacation.mp4",
+    "title": "Summer Vacation",
+    "originalFileName": "Vacation.mp4",
+    "fileSize": 145281920,
+    "fileSizeFormatted": "138.5 MB",
+    "mimeType": "video/mp4",
+    "uploadedAt": 1727715600000,
+    "durationMs": 1824000,
+    "lastPlayedPositionMs": 345000,
+    "lastPlayedAt": 1727716200000,
+    "progress": 0.189,
+    "isCompleted": false,
+    "videoUrl": "/api/videos/1727715600_Vacation.mp4"
+  }
+]
+```
+
+### 10.4. Play or Resume Video (`POST /api/videos/{id}/play`)
+Triggers playback of a previously stored video on the TV. By default, resumes from `lastPlayedPositionMs`. If `resume=false` is passed, restarts from the beginning (`0:00`).
+
+- **Method**: `POST`
+- **Path**: `/api/videos/{id}/play?resume=true|false`
+- **Headers**: `X-Auth-Token`
+- **Response**: HTTP 200 JSON `{"status": "success", "resumedAtMs": 345000}`
+
+### 10.5. Stream or Download Completed Video (`GET /api/videos/{fileName}`)
+Serves a completed video file with full HTTP Range request support (seeking/scrubbing in external players or browsers).
+
+- **Method**: `GET`
+- **Path**: `/api/videos/{fileName}`
+- **Response**: HTTP 206 Partial Content / HTTP 200
+
+### 10.6. Delete Video (`DELETE /api/videos/{id}`) and Clear All (`DELETE /api/videos`)
+Deletes one or all stored videos and their accompanying `.meta.json` files from TV storage.
+
+- **Method**: `DELETE`
+- **Path**: `/api/videos/{id}` (or `/api/videos` for bulk delete)
+- **Headers**: `X-Auth-Token`
+- **Response**: HTTP 200 JSON `{"status": "success", "deleted": true}`
+

@@ -18,12 +18,16 @@
         button { background: #262c45; color: #fff; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 10px 16px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.15s ease; }
         button:hover { background: #38426b; border-color: #00e5ff; }
         button:active { transform: scale(0.96); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
         button.primary { background: #e50914; border-color: #e50914; }
         button.primary:hover { background: #f40612; }
         button.cyan { background: #0091ea; border-color: #00e5ff; }
         button.cyan:hover { background: #00b0ff; }
+        button.success { background: #00c853; border-color: #00e676; color: #000; font-weight: bold; }
+        button.success:hover { background: #00e676; }
         button.danger { background: #b71c1c; border-color: #ff5252; }
         button.danger:hover { background: #d50000; }
+        button.small { padding: 6px 12px; font-size: 12px; }
         label { display: block; font-size: 11px; font-weight: 600; color: #8c9ba5; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
         input[type="text"], input[type="number"] { min-width: 0; background: #0d0f17; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 10px 14px; color: #fff; font-size: 16px; outline: none; width: 100%; transition: border-color 0.2s ease; }
         input[type="text"]:focus, input[type="number"]:focus { border-color: #00e5ff; }
@@ -34,9 +38,26 @@
         .dpad-btn { width: 64px; height: 50px; display: flex; align-items: center; justify-content: center; font-size: 18px; border-radius: 8px; }
         .dpad-center { background: #e50914; border-color: #e50914; }
 
-        .log-box { width: 100%; height: 260px; background: #0d0f17; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; overflow-y: scroll; padding: 12px; font-family: monospace; font-size: 12px; }
+        .log-box { width: 100%; height: 220px; background: #0d0f17; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; overflow-y: scroll; padding: 12px; font-family: monospace; font-size: 12px; }
         .log-item { margin-bottom: 4px; line-height: 1.4; word-break: break-all; }
-        @media (max-width: 700px) {
+
+        /* Upload & Video Library Components */
+        .upload-box { background: #0d0f17; border: 2px dashed rgba(255,255,255,0.2); border-radius: 10px; padding: 16px; text-align: center; margin-bottom: 14px; transition: border-color 0.2s ease; }
+        .upload-box:hover { border-color: #00e5ff; }
+        .file-info { display: flex; align-items: center; justify-content: space-between; background: #161a29; border-radius: 8px; padding: 10px 14px; margin-top: 10px; font-size: 13px; text-align: left; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+        .badge-green { background: #0c3321; color: #00e676; }
+        .badge-yellow { background: #332d0c; color: #ffd600; }
+        .badge-blue { background: #0c2333; color: #00e5ff; }
+        .progress-track { width: 100%; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden; margin-top: 8px; }
+        .progress-fill { height: 100%; background: #00e5ff; width: 0%; transition: width 0.15s ease; }
+        
+        .video-item { background: #12141c; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 12px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; }
+        .video-item-header { display: flex; align-items: center; justify-content: space-between; }
+        .video-item-title { font-weight: 700; font-size: 14px; color: #fff; }
+        .video-item-meta { font-size: 12px; color: #8c9ba5; }
+
+        @media (max-width: 800px) {
             body { padding: 12px; }
             .panel-grid { grid-template-columns: 1fr; }
             .card { padding: 16px; }
@@ -45,86 +66,156 @@
 </head>
 <body>
     <h2>MobPlayer TV - Interactive Remote Controller</h2>
-    <p>Test remote control actions, D-pad navigation, volume, and playback commands over WebSocket.</p>
+    <p>Upload videos, stream directly to TV, and control playback over local network.</p>
     <p id="connectionHint">Click Connect, then enter the pairing PIN shown on your TV.</p>
     <div id="status" class="status-badge">Disconnected</div>
 
     <div class="panel-grid">
-        <!-- Connection & Authentication Panel -->
-        <div class="card">
-            <h3>1. Pairing & Connection</h3>
-            
-            <!-- IP Address & Port Configuration -->
-            <div style="display: flex; gap: 10px; margin-bottom: 12px;">
-                <div style="flex: 2;">
-                    <label for="ipInput">Server IP Address</label>
-                    <input type="text" id="ipInput" value="localhost" placeholder="localhost or TV IP (e.g. 192.168.1.10)" />
+        <!-- Column 1: Connection & Video Upload -->
+        <div style="display: flex; flex-direction: column; gap: 20px;">
+            <!-- Connection & Auth Card -->
+            <div class="card">
+                <h3>1. Pairing & Connection</h3>
+                
+                <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+                    <div style="flex: 2;">
+                        <label for="ipInput">Server IP Address</label>
+                        <input type="text" id="ipInput" value="localhost" placeholder="localhost or TV IP" />
+                    </div>
+                    <div style="flex: 1;">
+                        <label for="portInput">Port</label>
+                        <input type="number" id="portInput" value="8080" placeholder="8080" />
+                    </div>
                 </div>
-                <div style="flex: 1;">
-                    <label for="portInput">Port</label>
-                    <input type="number" id="portInput" value="8080" placeholder="8080" />
+
+                <div class="btn-group">
+                    <button class="cyan" onclick="connect()">Connect</button>
+                    <button class="danger" onclick="disconnect()">Disconnect</button>
+                    <button onclick="sendAuthRequest()">Auto Auth (Saved Token)</button>
+                </div>
+
+                <div style="margin-top: 14px;">
+                    <label for="pinInput">Pairing PIN</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="pinInput" placeholder="Enter 4-digit PIN" maxlength="4" style="width: 160px;" />
+                        <button class="primary" onclick="sendPinSubmit()">Submit PIN</button>
+                    </div>
                 </div>
             </div>
 
-            <div class="btn-group">
-                <button class="cyan" onclick="connect()">Connect</button>
-                <button class="danger" onclick="disconnect()">Disconnect</button>
-                <button onclick="sendAuthRequest()">Auto Auth (Saved Token)</button>
-            </div>
+            <!-- Upload & Play Local Video Card -->
+            <div class="card">
+                <h3>2. Upload & Play Video from Device</h3>
+                
+                <div class="upload-box" id="dropZone">
+                    <p style="margin-bottom: 10px; font-weight: 600;">Choose a video file from your computer or phone</p>
+                    <input type="file" id="videoFileInput" accept="video/*" style="display: none;" onchange="handleFileSelect(event)" />
+                    <button class="cyan small" onclick="document.getElementById('videoFileInput').click()">📁 Select Video File</button>
+                    
+                    <div id="selectedFileInfo" class="file-info" style="display: none;">
+                        <div>
+                            <div id="selectedFileName" style="font-weight: 700; color: #fff;"></div>
+                            <div id="selectedFileSize" style="color: #8c9ba5; font-size: 11px; margin-top: 2px;"></div>
+                        </div>
+                        <span id="fastStartBadge" class="badge badge-green">Checking...</span>
+                    </div>
+                </div>
 
-            <div style="margin-top: 14px;">
-                <label for="pinInput">Pairing PIN</label>
-                <div style="display: flex; gap: 8px;">
-                    <input type="text" id="pinInput" placeholder="Enter 4-digit PIN" maxlength="4" style="width: 160px;" />
-                    <button class="primary" onclick="sendPinSubmit()">Submit PIN</button>
+                <div style="margin-bottom: 12px;">
+                    <label for="videoTitleInput">Video Title (displayed on TV)</label>
+                    <input type="text" id="videoTitleInput" placeholder="Title for TV (e.g. Summer Vacation)" />
+                </div>
+
+                <div class="btn-group">
+                    <button id="btnInstantPlay" class="success" onclick="uploadAndPlay(true)" disabled>▶ Play on TV (Instant Stream)</button>
+                    <button id="btnUploadOnly" onclick="uploadAndPlay(false)" disabled>⬆ Upload Only</button>
+                </div>
+
+                <!-- Live Upload Progress -->
+                <div id="uploadProgressSection" style="display: none; margin-top: 14px; background: #0d0f17; border-radius: 8px; padding: 12px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;">
+                        <span id="uploadStatusText" style="font-weight: 700; color: #00e5ff;">Uploading to TV...</span>
+                        <span id="uploadPercentText" style="font-weight: 700;">0%</span>
+                    </div>
+                    <div class="progress-track">
+                        <div id="uploadProgressBar" class="progress-fill"></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 11px; color: #8c9ba5; margin-top: 6px;">
+                        <span id="uploadSpeedText">0 MB/s</span>
+                        <span id="uploadBytesText">0 / 0 MB</span>
+                    </div>
                 </div>
             </div>
 
-            <h3 style="margin-top: 24px;">2. Media Streaming</h3>
-            <div>
-                <label for="mediaUrl">Direct Video Stream URL</label>
-                <div style="display: flex; gap: 8px; margin-bottom: 10px;">
-                    <input type="text" id="mediaUrl" placeholder="Direct MP4 / HLS URL" value="https://storage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4" style="flex: 1;" />
-                    <button class="primary" onclick="sendLoadMedia()">Stream on TV</button>
+            <!-- Direct URL Streaming Card -->
+            <div class="card">
+                <h3>3. Direct Video Stream URL</h3>
+                <div>
+                    <label for="mediaUrl">Web Stream URL (MP4 / HLS)</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="mediaUrl" placeholder="Direct MP4 / HLS URL" value="https://storage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4" style="flex: 1;" />
+                        <button class="primary" onclick="sendLoadMedia()">Stream</button>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- TV Remote D-Pad & Controls -->
-        <div class="card">
-            <h3>3. Remote Controller</h3>
-            
-            <div class="dpad-container">
-                <button class="dpad-btn" onclick="sendAction('DPAD_UP')">▲</button>
-                <div class="dpad-row">
-                    <button class="dpad-btn" onclick="sendAction('DPAD_LEFT')">◄</button>
-                    <button class="dpad-btn dpad-center" onclick="sendAction('DPAD_CENTER')">OK</button>
-                    <button class="dpad-btn" onclick="sendAction('DPAD_RIGHT')">►</button>
+        <!-- Column 2: Remote Controller & Videos Library -->
+        <div style="display: flex; flex-direction: column; gap: 20px;">
+            <!-- TV Remote D-Pad & Controls -->
+            <div class="card">
+                <h3>4. Remote Controller</h3>
+                
+                <div class="dpad-container">
+                    <button class="dpad-btn" onclick="sendAction('DPAD_UP')">▲</button>
+                    <div class="dpad-row">
+                        <button class="dpad-btn" onclick="sendAction('DPAD_LEFT')">◄</button>
+                        <button class="dpad-btn dpad-center" onclick="sendAction('DPAD_CENTER')">OK</button>
+                        <button class="dpad-btn" onclick="sendAction('DPAD_RIGHT')">►</button>
+                    </div>
+                    <button class="dpad-btn" onclick="sendAction('DPAD_DOWN')">▼</button>
                 </div>
-                <button class="dpad-btn" onclick="sendAction('DPAD_DOWN')">▼</button>
+
+                <div class="btn-group" style="justify-content: center;">
+                    <button onclick="sendAction('BACK')">↩ Back</button>
+                    <button onclick="sendAction('HOME')">🏠 Home</button>
+                    <button class="primary" onclick="sendAction('PLAY')">▶ Play</button>
+                    <button onclick="sendAction('PAUSE')">⏸ Pause</button>
+                    <button onclick="sendAction('STOP')">⏹ Stop</button>
+                </div>
+
+                <div class="btn-group" style="justify-content: center; margin-top: 8px;">
+                    <button onclick="sendAction('SEEK_BACKWARD')">⏪ -10s</button>
+                    <button onclick="sendAction('SEEK_FORWARD')">⏩ +10s</button>
+                    <button onclick="sendAction('VOLUME_UP')">🔊 Vol +</button>
+                    <button onclick="sendAction('VOLUME_DOWN')">🔉 Vol -</button>
+                    <button onclick="sendAction('MUTE')">🔇 Mute</button>
+                </div>
             </div>
 
-            <div class="btn-group" style="justify-content: center;">
-                <button onclick="sendAction('BACK')">↩ Back</button>
-                <button onclick="sendAction('HOME')">🏠 Home</button>
-                <button class="primary" onclick="sendAction('PLAY')">▶ Play</button>
-                <button onclick="sendAction('PAUSE')">⏸ Pause</button>
-                <button onclick="sendAction('STOP')">⏹ Stop</button>
-            </div>
+            <!-- Videos Stored on TV Library -->
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px;">
+                    <h3 style="margin-bottom: 0; border-bottom: none; padding-bottom: 0;">5. Stored Videos on TV</h3>
+                    <div style="display: flex; gap: 6px;">
+                        <button class="small" onclick="fetchUploadedVideos()">🔄 Refresh</button>
+                        <button class="danger small" onclick="clearAllVideos()">🗑 Clear All</button>
+                    </div>
+                </div>
 
-            <div class="btn-group" style="justify-content: center; margin-top: 8px;">
-                <button onclick="sendAction('SEEK_BACKWARD')">⏪ -10s</button>
-                <button onclick="sendAction('SEEK_FORWARD')">⏩ +10s</button>
-                <button onclick="sendAction('VOLUME_UP')">🔊 Vol +</button>
-                <button onclick="sendAction('VOLUME_DOWN')">🔉 Vol -</button>
-                <button onclick="sendAction('MUTE')">🔇 Mute</button>
+                <div id="videoLibraryList" style="max-height: 280px; overflow-y: auto;">
+                    <div style="color: #8c9ba5; font-size: 13px; text-align: center; padding: 20px;">
+                        No uploaded videos on TV yet. Use section 2 to upload videos from your device!
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
+    <!-- Activity Log -->
     <div class="card" style="margin-top: 20px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px;">
-            <h3 style="margin-bottom: 0; border-bottom: none; padding-bottom: 0;">Activity Log & WebSocket Messages</h3>
+            <h3 style="margin-bottom: 0; border-bottom: none; padding-bottom: 0;">Activity Log & Server Events</h3>
             <button onclick="clearLog()" style="padding: 4px 10px; font-size: 12px;">Clear Log</button>
         </div>
         <div class="log-box" id="logBox"></div>
@@ -132,6 +223,9 @@
 
     <script>
         let ws;
+        let selectedFile = null;
+        let uploadXhr = null;
+
         const logBox = document.getElementById('logBox');
         const statusSpan = document.getElementById('status');
         const isHosted = ['http:', 'https:'].includes(window.location.protocol);
@@ -140,6 +234,7 @@
             ? (window.location.port || (window.location.protocol === 'https:' ? '443' : '80'))
             : '8080';
         const socketProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        
         document.getElementById('ipInput').value = defaultHost;
         document.getElementById('portInput').value = defaultPort;
         if (isHosted) {
@@ -160,9 +255,34 @@
         function getTargetEndpoint() {
             const ip = document.getElementById('ipInput').value.trim() || defaultHost;
             const port = document.getElementById('portInput').value.trim() || defaultPort;
-            return { ip, port, url: `${socketProtocol}//${ip}:${port}/control` };
+            const httpProto = window.location.protocol === 'https:' ? 'https:' : 'http:';
+            return {
+                ip,
+                port,
+                url: `${socketProtocol}//${ip}:${port}/control`,
+                httpBase: `${httpProto}//${ip}:${port}`
+            };
         }
 
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        function formatTimeMs(ms) {
+            if (!ms || ms <= 0) return '00:00';
+            const totalSec = Math.floor(ms / 1000);
+            const m = Math.floor(totalSec / 60);
+            const s = totalSec % 60;
+            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        }
+
+        // ==========================================
+        // 1. WebSocket Connection & Authentication
+        // ==========================================
         function connect() {
             if (ws) {
                 ws.close();
@@ -183,6 +303,7 @@
                 statusSpan.textContent = `Connected (${ip}:${port}) - Needs Auth`;
                 statusSpan.className = "status-badge status-connected";
                 log(`<b>Connection established!</b> Connected to MobPlayer TV server at <b>${url}</b>`, "#00e676");
+                fetchUploadedVideos();
             };
             
             ws.onmessage = (event) => {
@@ -193,10 +314,13 @@
                         statusSpan.textContent = `Authenticated & Active (${ip}:${port})`;
                         localStorage.setItem("mobplayer_token", data.payload);
                         log("<b>Authentication successful!</b> Stored token: " + data.payload, "#00e676");
+                        fetchUploadedVideos();
                     } else if (data.type === "AUTH_FAILED") {
                         log("❌ Authentication failed: " + data.payload, "#ff5252");
                     } else if (data.type === "PIN_REQUIRED") {
                         log("🔢 PIN required by TV. Enter the 4-digit PIN shown on the TV screen.", "#ffd600");
+                    } else if (data.type === "STATE_UPDATE") {
+                        fetchUploadedVideos();
                     }
                 } catch(e) {}
             };
@@ -208,7 +332,7 @@
             };
             
             ws.onerror = (error) => {
-                log(`Failed to connect to ${url}. Verify that the TV app is open and both devices are on the same LAN. For an emulator, keep the port-forwarding setup running.`, "#ff5252");
+                log(`Failed to connect to ${url}. Verify TV app is open and on same LAN.`, "#ff5252");
             };
         }
 
@@ -219,8 +343,6 @@
                 statusSpan.textContent = "Disconnected";
                 statusSpan.className = "status-badge";
                 log("Disconnected by user.", "#ffd600");
-            } else {
-                log("No active connection to disconnect.", "#8c9ba5");
             }
         }
 
@@ -261,6 +383,268 @@
             });
             ws.send(msg);
             log(`--&gt; Sent LOAD_MEDIA: ${url}`, "#e040fb");
+        }
+
+        // ==========================================
+        // 2. Video File Selection & Fast-Start Check
+        // ==========================================
+        async function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            selectedFile = file;
+
+            document.getElementById('selectedFileInfo').style.display = 'flex';
+            document.getElementById('selectedFileName').textContent = file.name;
+            document.getElementById('selectedFileSize').textContent = `${formatBytes(file.size)} • ${file.type || 'video'}`;
+            
+            // Pre-fill title without extension
+            const defaultTitle = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+            document.getElementById('videoTitleInput').value = defaultTitle;
+
+            document.getElementById('btnInstantPlay').disabled = false;
+            document.getElementById('btnUploadOnly').disabled = false;
+
+            const badge = document.getElementById('fastStartBadge');
+            badge.textContent = "Analyzing...";
+            badge.className = "badge badge-blue";
+
+            const isFast = await checkIsFastStart(file);
+            if (isFast) {
+                badge.textContent = "⚡ Fast-Start Ready";
+                badge.className = "badge badge-green";
+            } else {
+                badge.textContent = "Standard File";
+                badge.className = "badge badge-yellow";
+            }
+        }
+
+        async function checkIsFastStart(file) {
+            try {
+                const slice = file.slice(0, 131072);
+                const buffer = await slice.arrayBuffer();
+                const view = new DataView(buffer);
+                let offset = 0;
+                while (offset < view.byteLength - 8) {
+                    const size = view.getUint32(offset);
+                    const type = String.fromCharCode(
+                        view.getUint8(offset + 4),
+                        view.getUint8(offset + 5),
+                        view.getUint8(offset + 6),
+                        view.getUint8(offset + 7)
+                    );
+                    if (type === 'moov') return true;
+                    if (type === 'mdat') return false;
+                    if (size <= 0) break;
+                    offset += size;
+                }
+            } catch (e) {}
+            return true;
+        }
+
+        // ==========================================
+        // 3. Progressive Video Upload & Stream
+        // ==========================================
+        function uploadAndPlay(playImmediately) {
+            if (!selectedFile) return alert("Please select a video file first.");
+
+            const { httpBase } = getTargetEndpoint();
+            const token = localStorage.getItem("mobplayer_token") || "";
+            const title = document.getElementById('videoTitleInput').value.trim() || selectedFile.name;
+
+            const progressSection = document.getElementById('uploadProgressSection');
+            const progressBar = document.getElementById('uploadProgressBar');
+            const statusText = document.getElementById('uploadStatusText');
+            const percentText = document.getElementById('uploadPercentText');
+            const bytesText = document.getElementById('uploadBytesText');
+            const speedText = document.getElementById('uploadSpeedText');
+
+            progressSection.style.display = 'block';
+            progressBar.style.width = '0%';
+            percentText.textContent = '0%';
+            statusText.textContent = playImmediately ? "Streaming to TV..." : "Uploading to TV...";
+
+            const url = `${httpBase}/api/upload?playImmediately=${playImmediately}&title=${encodeURIComponent(title)}&totalSize=${selectedFile.size}`;
+
+            const formData = new FormData();
+            formData.append('title', title);
+            formData.append('playImmediately', playImmediately ? 'true' : 'false');
+            formData.append('file', selectedFile, selectedFile.name);
+
+            uploadXhr = new XMLHttpRequest();
+            let startTime = Date.now();
+            let hasTriggeredPlayState = false;
+
+            uploadXhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) {
+                    const percent = Math.round((e.loaded / e.total) * 100);
+                    progressBar.style.width = percent + '%';
+                    percentText.textContent = percent + '%';
+                    bytesText.textContent = `${formatBytes(e.loaded)} / ${formatBytes(e.total)}`;
+
+                    const elapsedSec = (Date.now() - startTime) / 1000;
+                    if (elapsedSec > 0.5) {
+                        const speed = e.loaded / elapsedSec;
+                        speedText.textContent = `${formatBytes(speed)}/s`;
+                    }
+
+                    if (playImmediately && !hasTriggeredPlayState && e.loaded >= 3 * 1024 * 1024) {
+                        hasTriggeredPlayState = true;
+                        statusText.textContent = "🟢 Playing on TV! (Uploading remainder in background)";
+                        log(`⚡ <b>Progressive Streaming Started!</b> TV began playback while upload continues in background.`, "#00e676");
+                    }
+                }
+            };
+
+            uploadXhr.onload = () => {
+                if (uploadXhr.status >= 200 && uploadXhr.status < 300) {
+                    progressBar.style.width = '100%';
+                    percentText.textContent = '100%';
+                    statusText.textContent = "✅ Upload complete! Saved to TV.";
+                    log(`✅ <b>Upload Complete!</b> Video "${title}" is saved in the TV library.`, "#00e676");
+                    fetchUploadedVideos();
+                } else {
+                    statusText.textContent = `❌ Upload failed (${uploadXhr.status})`;
+                    log(`❌ Upload failed with status ${uploadXhr.status}: ${uploadXhr.responseText}`, "#ff5252");
+                }
+            };
+
+            uploadXhr.onerror = () => {
+                statusText.textContent = "❌ Network error during upload";
+                log("❌ Network error occurred during video upload.", "#ff5252");
+            };
+
+            uploadXhr.open('POST', url, true);
+            if (token) uploadXhr.setRequestHeader('X-Auth-Token', token);
+            uploadXhr.setRequestHeader('X-File-Size', selectedFile.size.toString());
+            uploadXhr.send(formData);
+            log(`🚀 Starting upload of <b>${selectedFile.name}</b> (${formatBytes(selectedFile.size)})...`, "#00e5ff");
+        }
+
+        // ==========================================
+        // 4. Stored Videos Library Management
+        // ==========================================
+        async function fetchUploadedVideos() {
+            const { httpBase } = getTargetEndpoint();
+            const token = localStorage.getItem("mobplayer_token") || "";
+
+            try {
+                const res = await fetch(`${httpBase}/api/videos`, {
+                    headers: token ? { 'X-Auth-Token': token } : {}
+                });
+                if (!res.ok) return;
+                const videos = await res.json();
+                renderVideoLibrary(videos);
+            } catch (e) {}
+        }
+
+        function renderVideoLibrary(videos) {
+            const listEl = document.getElementById('videoLibraryList');
+            if (!videos || videos.length === 0) {
+                listEl.innerHTML = `<div style="color: #8c9ba5; font-size: 13px; text-align: center; padding: 20px;">No uploaded videos on TV yet. Use section 2 to upload videos!</div>`;
+                return;
+            }
+
+            let html = '';
+            videos.forEach(v => {
+                const progressPct = Math.round((v.progress || 0) * 100);
+                const hasProgress = v.lastPlayedPositionMs > 5000 && !v.isCompleted;
+                const resumeLabel = hasProgress ? `▶ Resume (${formatTimeMs(v.lastPlayedPositionMs)})` : `▶ Play`;
+
+                html += `
+                <div class="video-item">
+                    <div class="video-item-header">
+                        <div>
+                            <span class="video-item-title">${escapeHtml(v.title)}</span>
+                            <div class="video-item-meta">${escapeHtml(v.originalFileName)} • ${v.fileSizeFormatted}</div>
+                        </div>
+                        <span class="badge ${hasProgress ? 'badge-green' : 'badge-blue'}">${hasProgress ? progressPct + '% WATCHED' : 'READY'}</span>
+                    </div>
+                    
+                    ${v.durationMs > 0 ? `
+                        <div style="font-size: 11px; color: #8c9ba5; display: flex; justify-content: space-between;">
+                            <span>Progress: ${formatTimeMs(v.lastPlayedPositionMs)} / ${formatTimeMs(v.durationMs)}</span>
+                            <span>${progressPct}%</span>
+                        </div>
+                        <div class="progress-track" style="margin-top: 2px;">
+                            <div class="progress-fill" style="width: ${progressPct}%;"></div>
+                        </div>
+                    ` : ''}
+
+                    <div style="display: flex; gap: 6px; margin-top: 4px;">
+                        <button class="success small" onclick="playStoredVideo('${v.id}', true)">${resumeLabel}</button>
+                        <button class="small" onclick="playStoredVideo('${v.id}', false)">↺ Restart</button>
+                        <button class="danger small" onclick="deleteStoredVideo('${v.id}')">🗑</button>
+                    </div>
+                </div>
+                `;
+            });
+            listEl.innerHTML = html;
+        }
+
+        async function playStoredVideo(id, resume) {
+            const { httpBase } = getTargetEndpoint();
+            const token = localStorage.getItem("mobplayer_token") || "";
+
+            try {
+                const res = await fetch(`${httpBase}/api/videos/${id}/play?resume=${resume}`, {
+                    method: 'POST',
+                    headers: token ? { 'X-Auth-Token': token } : {}
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    log(`▶ Started playback of video on TV${data.resumedAtMs > 0 ? ` (Resumed from ${formatTimeMs(data.resumedAtMs)})` : ''}`, "#00e676");
+                    fetchUploadedVideos();
+                }
+            } catch (e) {
+                log(`Failed to trigger playback: ${e.message}`, "#ff5252");
+            }
+        }
+
+        async function deleteStoredVideo(id) {
+            if (!confirm("Are you sure you want to delete this video from the TV?")) return;
+            const { httpBase } = getTargetEndpoint();
+            const token = localStorage.getItem("mobplayer_token") || "";
+
+            try {
+                const res = await fetch(`${httpBase}/api/videos/${id}`, {
+                    method: 'DELETE',
+                    headers: token ? { 'X-Auth-Token': token } : {}
+                });
+                log(`🗑 Video deleted from TV storage.`, "#ffd600");
+                fetchUploadedVideos();
+            } catch (e) {
+                log(`Failed to delete video: ${e.message}`, "#ff5252");
+            }
+        }
+
+        async function clearAllVideos() {
+            if (!confirm("Are you sure you want to delete ALL uploaded videos from the TV?")) return;
+            const { httpBase } = getTargetEndpoint();
+            const token = localStorage.getItem("mobplayer_token") || "";
+
+            try {
+                const res = await fetch(`${httpBase}/api/videos`, {
+                    method: 'DELETE',
+                    headers: token ? { 'X-Auth-Token': token } : {}
+                });
+                const data = await res.json();
+                log(`🗑 Cleared all (${data.deletedCount || 0}) videos from TV storage.`, "#ffd600");
+                fetchUploadedVideos();
+            } catch (e) {
+                log(`Failed to clear videos: ${e.message}`, "#ff5252");
+            }
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>"']/g, function(m) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+            });
+        }
+
+        // Fetch videos on page load if hosted
+        if (isHosted) {
+            fetchUploadedVideos();
         }
     </script>
 </body>

@@ -28,6 +28,10 @@ class MediaRepository @Inject constructor(
     private var progressJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
+    var activePlayingVideoId: String? = null
+    var onPlaybackProgressUpdate: ((videoId: String, positionMs: Long, durationMs: Long) -> Unit)? = null
+    var onPlaybackError: ((error: androidx.media3.common.PlaybackException) -> Unit)? = null
+
     fun initialize(): ExoPlayer {
         player?.let { return it }
 
@@ -61,6 +65,12 @@ class MediaRepository @Inject constructor(
             
             override fun onVolumeChanged(volume: Float) {
                 updateState()
+            }
+
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                android.util.Log.e("MediaRepository", "❌ Playback error: ${error.message}", error)
+                updateState()
+                onPlaybackError?.invoke(error)
             }
         })
 
@@ -102,9 +112,12 @@ class MediaRepository @Inject constructor(
 
     fun pause() {
         player?.pause()
+        updateState()
     }
 
     fun stop() {
+        updateState()
+        activePlayingVideoId = null
         player?.stop()
         player?.clearMediaItems()
         updateState()
@@ -112,6 +125,7 @@ class MediaRepository @Inject constructor(
 
     fun seekTo(positionMs: Long) {
         player?.seekTo(positionMs)
+        updateState()
     }
 
     fun setVolume(volume: Float) {
@@ -119,10 +133,14 @@ class MediaRepository @Inject constructor(
         updateState()
     }
 
-    fun loadMedia(url: String) {
+    fun loadMedia(url: String, startPositionMs: Long = 0L, videoId: String? = null) {
+        activePlayingVideoId = videoId
         val mediaItem = MediaItem.fromUri(url)
         player?.setMediaItem(mediaItem)
         player?.prepare()
+        if (startPositionMs > 0L) {
+            player?.seekTo(startPositionMs)
+        }
         player?.play()
     }
 
@@ -134,5 +152,11 @@ class MediaRepository @Inject constructor(
         val volume = exo.volume
         
         _playerStateFlow.value = PlayerStatePayload(isPlaying, positionMs, durationMs, volume)
+
+        activePlayingVideoId?.let { videoId ->
+            if (durationMs > 0L) {
+                onPlaybackProgressUpdate?.invoke(videoId, positionMs, durationMs)
+            }
+        }
     }
 }
