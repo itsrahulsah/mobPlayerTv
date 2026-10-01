@@ -57,11 +57,41 @@ MobPlayer TV is a local-network Android TV application. It acts as a headless me
 - **Unstable APIs Removed**: Replaced experimental `androidx.tv` Material 3 components with standard Compose `MaterialTheme` and removed `DefaultLoadControl` custom `@UnstableApi` in `MediaManager`.
 - **Media Polling**: `MediaManager` now correctly polls `player.currentPosition` every 1 second while playing, which automatically broadcasts updates to the TV UI and WebSocket clients via `playerStateFlow`.
 
-## Planned Architectural Refactoring (Anti-Pattern Migration)
-Currently, `ServerEventBus` and `MediaManager` are implemented as global Kotlin `object` singletons. This acts as a pragmatic bridge between the `WebSocketServerService` and `MainActivity`, bypassing complex Android lifecycles.
+## Architecture & Core Components (Hilt DI)
+The project uses Dagger Hilt with constructor injection and clean repository pattern:
+1. **Network Discovery (`NsdHelper.kt`)**: Broadcasts service via Android `NsdManager`.
+2. **WebSocket Server (`KtorServerManager.kt` & `WebSocketServerService.kt`)**: Embedded Ktor CIO server on port 8080 handling WebSocket control commands and REST endpoints.
+3. **Authentication (`AuthManager.kt`)**: Generates 4-digit PINs, validates tokens via `EncryptedSharedPreferences`.
+4. **Media Playback (`MediaRepository.kt`)**: Wraps Media3/ExoPlayer, emits `playerStateFlow`, handles playback actions and progress polling.
+5. **Video Upload & Storage (`VideoUploadManager.kt`)**: 
+   - Manages local video storage in `context.filesDir/uploads/`.
+   - Handles progressive streaming (`ActiveUpload`) allowing ExoPlayer to start playing growing files within 1–2 seconds via `/api/stream/{uploadId}` while the remainder uploads in the background.
+   - Manages persistent metadata (`VideoMetadata`) including custom title, file size, duration, and last-played timestamp (`lastPlayedPositionMs`).
+   - Supports auto-resume: restores playback position when replaying stored videos.
+6. **UI & State (`MainActivity.kt`, `TvHomeScreen.kt`, `TvMainViewModel.kt`)**:
+   - Built with Jetpack Compose for TV.
+   - `TvHomeScreen.kt` displays content rails, including an "Uploaded Videos" rail using `CardType.CONTINUE_WATCHING` showing video titles and watch progress bars.
+   - `TvVideoPlayerOverlay.kt` renders player timeline and controls.
+   - `TvRemoteActionHud.kt` displays floating action pills on the TV screen.
 
-However, to scale this into a production-level enterprise application, a **~15 file refactoring** is planned to migrate to a standard Dependency Injection architecture:
-1. **Hilt Setup**: Add Dagger Hilt plugins and a `@HiltAndroidApp` Application class.
-2. **Repositories**: Convert the singletons into `ServerRepository` and `MediaRepository` provided via a Hilt module.
-3. **ViewModels**: Implement `TvMainViewModel` (replacing the unused `ServerStateViewModel`) to observe the repositories and expose state flows to the Compose UI.
-4. **Service Injection**: Update `WebSocketServerService` and `KtorServerManager` to accept the repositories via constructor injection.
+## Video Upload, Instant Progressive Streaming & Universal Media Support
+- **Universal Container & Protocol Support**:
+  - Expanded Media3 dependencies to include `media3-exoplayer-hls`, `media3-exoplayer-dash`, and `media3-exoplayer-rtsp`.
+  - Dynamic container and MIME type resolution via `VideoMetadata.resolveMimeType()` supporting MP4, MKV, WebM, MPEG-TS, AVI, MOV, FLV, WMV, 3GP, Ogg, HLS (.m3u8), DASH (.mpd), RTSP, and all common audio formats (MP3, AAC, FLAC, WAV, Opus).
+  - Cleartext HTTP traffic permitted via `network_security_config.xml` and `android:usesCleartextTraffic="true"` for local-network streaming.
+
+- **Instant Progressive Playback (< 0.5s Start)**:
+  - **Aggressive Fast-Start LoadControl**: Configured `DefaultLoadControl` in `MediaRepository.kt` with `bufferForPlaybackMs = 250ms`, `bufferForPlaybackAfterRebufferMs = 500ms`, and `prioritizeTimeOverSizeThresholds = true`. ExoPlayer transitions to `STATE_READY` and renders video immediately with only a fraction of a second buffered.
+  - **64 KB Initial Playback Trigger**: Playback begins when `bytesWritten >= 65536L` (or half of total size for tiny files), cutting startup latency to < 500ms.
+  - **Dual Upload Support**: `POST /api/upload` handles both direct raw binary streams (`call.receiveChannel()`) with zero multipart overhead and standard `multipart/form-data`.
+  - **Non-Interrupting Completion Handler**: Completed uploads no longer reset or abort active progressive streams. ExoPlayer plays seamlessly through the end of the video without interruption.
+  - **Client-Side Fast-Start Optimization**: `test_client.html` features in-browser zero-copy `ensureFastStart()` that dynamically relocates the `moov` atom ahead of `mdat` in MP4 files using `Blob.slice()` and patches `stco`/`co64` chunk offsets before streaming.
+
+## Video Upload & Playback Resume REST Endpoints
+- `POST /api/upload`: Direct binary stream or multipart upload with `playImmediately`, `title`, `fileName`, and instant progressive streaming.
+- `GET /api/stream/{uploadId}`: Progressive HTTP Range-capable stream for playing growing files with automatic EOF resolution.
+- `GET /api/videos`: List all stored videos with metadata and watch progress.
+- `GET /api/videos/{fileName}`: Direct streaming / downloading of stored video.
+- `POST /api/videos/{id}/play`: Play / Resume video at saved position.
+- `DELETE /api/videos/{id}` / `DELETE /api/videos`: Storage management and cleanup.
+

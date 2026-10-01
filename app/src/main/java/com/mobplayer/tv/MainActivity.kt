@@ -88,6 +88,7 @@ class MainActivity : ComponentActivity() {
             val connectedDeviceName by viewModel.serverRepository.connectedDeviceName.collectAsState()
             val activeMediaTitle by viewModel.serverRepository.activeMediaTitle.collectAsState()
             val isPlayerActive by viewModel.serverRepository.isPlayerActive.collectAsState()
+            val uploadedVideos by viewModel.uploadedVideos.collectAsState()
 
             // Remote Back button handler: return to TV Home if player is active
             BackHandler(enabled = isPlayerActive) {
@@ -158,17 +159,23 @@ class MainActivity : ComponentActivity() {
                                     // TV Streaming Home Screen
                                     TvHomeScreen(
                                         connectedDeviceName = connectedDeviceName,
+                                        uploadedVideos = uploadedVideos,
                                         onPlayMedia = { item ->
-                                            viewModel.serverRepository.openPlayer(item.title)
-                                            viewModel.mediaRepository.loadMedia(item.videoUrl)
-                                            viewModel.serverRepository.postRemoteAction(
-                                                RemoteActionEvent(
-                                                    action = "PLAY",
-                                                    displayName = getString(R.string.action_playing, item.title),
-                                                    details = getString(R.string.starting_stream),
-                                                    iconType = RemoteIconType.PLAY
+                                            val uploadedMeta = viewModel.videoUploadManager.getVideoMetadata(item.id)
+                                            if (uploadedMeta != null) {
+                                                viewModel.playUploadedVideo(uploadedMeta, resume = true)
+                                            } else {
+                                                viewModel.serverRepository.openPlayer(item.title)
+                                                viewModel.mediaRepository.loadMedia(item.videoUrl)
+                                                viewModel.serverRepository.postRemoteAction(
+                                                    RemoteActionEvent(
+                                                        action = "PLAY",
+                                                        displayName = getString(R.string.action_playing, item.title),
+                                                        details = getString(R.string.starting_stream),
+                                                        iconType = RemoteIconType.PLAY
+                                                    )
                                                 )
-                                            )
+                                            }
                                         },
                                         onDisconnect = {
                                             viewModel.serverRepository.closePlayer()

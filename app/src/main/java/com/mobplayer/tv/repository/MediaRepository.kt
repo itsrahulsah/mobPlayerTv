@@ -28,10 +28,25 @@ class MediaRepository @Inject constructor(
     private var progressJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
+    var activePlayingVideoId: String? = null
+    var onPlaybackProgressUpdate: ((videoId: String, positionMs: Long, durationMs: Long) -> Unit)? = null
+    var onPlaybackError: ((error: androidx.media3.common.PlaybackException) -> Unit)? = null
+
     fun initialize(): ExoPlayer {
         player?.let { return it }
 
+        val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                /* minBufferMs = */ 1000,
+                /* maxBufferMs = */ 30000,
+                /* bufferForPlaybackMs = */ 250,
+                /* bufferForPlaybackAfterRebufferMs = */ 500
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
+
         val exoPlayer = ExoPlayer.Builder(context)
+            .setLoadControl(loadControl)
             .build()
         player = exoPlayer
         
@@ -39,6 +54,7 @@ class MediaRepository @Inject constructor(
 
         exoPlayer.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
+                android.util.Log.d("MediaRepository", "▶ onIsPlayingChanged: isPlaying=$isPlaying")
                 updateState()
                 if (isPlaying) {
                     startProgressPolling()
@@ -48,6 +64,14 @@ class MediaRepository @Inject constructor(
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
+                val stateName = when (playbackState) {
+                    Player.STATE_IDLE -> "IDLE"
+                    Player.STATE_BUFFERING -> "BUFFERING"
+                    Player.STATE_READY -> "READY"
+                    Player.STATE_ENDED -> "ENDED"
+                    else -> "UNKNOWN($playbackState)"
+                }
+                android.util.Log.d("MediaRepository", "🔄 onPlaybackStateChanged: state=$stateName, playWhenReady=${player?.playWhenReady}")
                 updateState()
             }
 
@@ -61,6 +85,12 @@ class MediaRepository @Inject constructor(
             
             override fun onVolumeChanged(volume: Float) {
                 updateState()
+            }
+
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                android.util.Log.e("MediaRepository", "❌ Playback error: ${error.message}", error)
+                updateState()
+                onPlaybackError?.invoke(error)
             }
         })
 
@@ -102,9 +132,12 @@ class MediaRepository @Inject constructor(
 
     fun pause() {
         player?.pause()
+        updateState()
     }
 
     fun stop() {
+        updateState()
+        activePlayingVideoId = null
         player?.stop()
         player?.clearMediaItems()
         updateState()
@@ -112,6 +145,7 @@ class MediaRepository @Inject constructor(
 
     fun seekTo(positionMs: Long) {
         player?.seekTo(positionMs)
+        updateState()
     }
 
     fun setVolume(volume: Float) {
@@ -119,10 +153,28 @@ class MediaRepository @Inject constructor(
         updateState()
     }
 
-    fun loadMedia(url: String) {
-        val mediaItem = MediaItem.fromUri(url)
+    fun loadMedia(
+        url: String,
+        startPositionMs: Long = 0L,
+        videoId: String? = null,
+        mimeType: String? = null
+    ) {
+        activePlayingVideoId = videoId
+        val builder = MediaItem.Builder().setUri(url)
+        val resolvedMime = if (!mimeType.isNullOrBlank()) {
+            mimeType
+        } else {
+            com.mobplayer.tv.models.VideoMetadata.resolveMimeType(url)
+        }
+        if (resolvedMime.isNotBlank()) {
+            builder.setMimeType(resolvedMime)
+        }
+        val mediaItem = builder.build()
         player?.setMediaItem(mediaItem)
         player?.prepare()
+        if (startPositionMs > 0L) {
+            player?.seekTo(startPositionMs)
+        }
         player?.play()
     }
 
@@ -134,5 +186,11 @@ class MediaRepository @Inject constructor(
         val volume = exo.volume
         
         _playerStateFlow.value = PlayerStatePayload(isPlaying, positionMs, durationMs, volume)
+
+        activePlayingVideoId?.let { videoId ->
+            if (durationMs > 0L) {
+                onPlaybackProgressUpdate?.invoke(videoId, positionMs, durationMs)
+            }
+        }
     }
 }

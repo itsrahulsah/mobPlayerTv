@@ -33,7 +33,7 @@
         }
 
         .container {
-            max-width: 800px;
+            max-width: 900px;
             margin: 0 auto;
         }
 
@@ -193,6 +193,11 @@
             transform: scale(0.97);
         }
 
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
         button.primary {
             background: var(--primary);
             border-color: var(--primary);
@@ -212,6 +217,38 @@
 
         button.danger:hover {
             background: rgba(239, 68, 68, 0.2);
+        }
+
+        button.success {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--success);
+            border-color: rgba(16, 185, 129, 0.3);
+        }
+
+        button.success:hover {
+            background: rgba(16, 185, 129, 0.25);
+        }
+
+        button.cyan {
+            background: rgba(99, 102, 241, 0.15);
+            color: #818cf8;
+            border-color: rgba(99, 102, 241, 0.3);
+        }
+
+        button.cyan:hover {
+            background: rgba(99, 102, 241, 0.25);
+        }
+
+        button.small {
+            padding: 6px 12px;
+            font-size: 12px;
+            border-radius: 8px;
+        }
+
+        .btn-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
         }
 
         /* Remote Control Layout */
@@ -339,6 +376,94 @@
             transform: scale(0.95);
         }
 
+        /* Upload & Video Library Components */
+        .upload-box { 
+            background: rgba(0, 0, 0, 0.2); 
+            border: 2px dashed var(--border-color); 
+            border-radius: 12px; 
+            padding: 20px; 
+            text-align: center; 
+            margin-bottom: 14px; 
+            transition: all 0.2s ease; 
+        }
+        .upload-box:hover { 
+            border-color: var(--primary); 
+            background: rgba(99, 102, 241, 0.05); 
+        }
+        .file-info { 
+            display: flex; 
+            align-items: center; 
+            justify-content: space-between; 
+            background: rgba(255, 255, 255, 0.04); 
+            border: 1px solid var(--border-color);
+            border-radius: 10px; 
+            padding: 10px 14px; 
+            margin-top: 12px; 
+            font-size: 13px; 
+            text-align: left; 
+        }
+        .badge { 
+            display: inline-flex; 
+            align-items: center; 
+            gap: 4px;
+            padding: 2px 8px; 
+            border-radius: 6px; 
+            font-size: 11px; 
+            font-weight: 700; 
+            text-transform: uppercase; 
+        }
+        .badge-green { 
+            background: rgba(16, 185, 129, 0.15); 
+            color: var(--success); 
+            border: 1px solid rgba(16, 185, 129, 0.25);
+        }
+        .badge-blue { 
+            background: rgba(99, 102, 241, 0.15); 
+            color: #818cf8; 
+            border: 1px solid rgba(99, 102, 241, 0.25);
+        }
+        .progress-track { 
+            width: 100%; 
+            height: 8px; 
+            background: rgba(0, 0, 0, 0.3); 
+            border-radius: 4px; 
+            overflow: hidden; 
+            margin-top: 8px; 
+            border: 1px solid var(--border-color);
+        }
+        .progress-fill { 
+            height: 100%; 
+            background: linear-gradient(90deg, #6366f1, #a855f7); 
+            width: 0%; 
+            transition: width 0.15s ease; 
+        }
+        
+        .video-item { 
+            background: rgba(0, 0, 0, 0.2); 
+            border: 1px solid var(--border-color); 
+            border-radius: 12px; 
+            padding: 14px; 
+            margin-bottom: 10px; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 8px; 
+        }
+        .video-item-header { 
+            display: flex; 
+            align-items: center; 
+            justify-content: space-between; 
+        }
+        .video-item-title { 
+            font-weight: 600; 
+            font-size: 14px; 
+            color: var(--text-main); 
+        }
+        .video-item-meta { 
+            font-size: 12px; 
+            color: var(--text-muted); 
+            margin-top: 2px;
+        }
+
         /* Log Box */
         .log-header {
             display: flex;
@@ -384,15 +509,16 @@
     <div class="container">
         <header>
             <h1><i class="fa-solid fa-tv" style="margin-right: 8px;"></i>MobPlayer TV</h1>
-            <p>Interactive Remote Controller</p>
+            <p>Interactive Remote Controller & Media Streaming</p>
             <div id="status" class="status-badge">Disconnected</div>
         </header>
 
         <div class="grid">
-            <!-- Connection & Settings -->
+            <!-- Left Column: Connection, Media Upload, Direct Stream -->
             <div class="card-column" style="display: flex; flex-direction: column; gap: 20px;">
+                <!-- 1. Connection Card -->
                 <div class="card" id="connectionCard">
-                    <div class="card-title"><i class="fa-solid fa-wifi"></i> Connection</div>
+                    <div class="card-title"><i class="fa-solid fa-wifi"></i> 1. Connection & Pairing</div>
                     
                     <div class="input-row form-group">
                         <div>
@@ -423,65 +549,134 @@
                     <button onclick="sendAuthRequest()" style="width: 100%;"><i class="fa-solid fa-key"></i> Auto Auth (Saved Token)</button>
                 </div>
 
+                <!-- 2. Upload & Play Local Video Card -->
                 <div class="card">
-                    <div class="card-title"><i class="fa-solid fa-chromecast"></i> Cast Media</div>
+                    <div class="card-title"><i class="fa-solid fa-upload"></i> 2. Upload & Play Media from Device</div>
+                    
+                    <div class="upload-box" id="dropZone">
+                        <p style="margin-bottom: 10px; font-size: 13px; color: var(--text-muted);">Choose any media file (MP4, MKV, WebM, AVI, TS, MOV, FLV, WMV, 3GP, MP3, etc.)</p>
+                        <input type="file" id="videoFileInput" accept="video/*,audio/*,.mkv,.mp4,.webm,.avi,.mov,.flv,.wmv,.ts,.m2ts,.m4v,.3gp,.ogg,.ogv,.vob,.mp3,.aac,.wav,.flac,.m4a,.opus,.m3u8,.mpd" style="display: none;" onchange="handleFileSelect(event)" />
+                        <button class="cyan small" onclick="document.getElementById('videoFileInput').click()"><i class="fa-solid fa-folder-open"></i> Select Media File</button>
+                        
+                        <div id="selectedFileInfo" class="file-info" style="display: none;">
+                            <div>
+                                <div id="selectedFileName" style="font-weight: 600; color: #fff;"></div>
+                                <div id="selectedFileSize" style="color: var(--text-muted); font-size: 11px; margin-top: 2px;"></div>
+                            </div>
+                            <span id="fastStartBadge" class="badge badge-green">Checking...</span>
+                        </div>
+                    </div>
+
                     <div class="form-group">
-                        <label for="mediaUrl">Direct Video Stream URL</label>
+                        <label for="videoTitleInput">Media Title (displayed on TV)</label>
+                        <input type="text" id="videoTitleInput" placeholder="Title for TV (e.g. Summer Vacation)" />
+                    </div>
+
+                    <div class="btn-group">
+                        <button id="btnInstantPlay" class="success" onclick="uploadAndPlay(true)" disabled><i class="fa-solid fa-play"></i> Play on TV (Instant Stream)</button>
+                        <button id="btnUploadOnly" onclick="uploadAndPlay(false)" disabled><i class="fa-solid fa-cloud-arrow-up"></i> Upload Only</button>
+                    </div>
+
+                    <!-- Live Upload Progress -->
+                    <div id="uploadProgressSection" style="display: none; margin-top: 14px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px;">
+                        <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;">
+                            <span id="uploadStatusText" style="font-weight: 600; color: #818cf8;">Uploading to TV...</span>
+                            <span id="uploadPercentText" style="font-weight: 600;">0%</span>
+                        </div>
+                        <div class="progress-track">
+                            <div id="uploadProgressBar" class="progress-fill"></div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-top: 6px;">
+                            <span id="uploadSpeedText">0 MB/s</span>
+                            <span id="uploadBytesText">0 / 0 MB</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. Direct URL Streaming Card -->
+                <div class="card">
+                    <div class="card-title"><i class="fa-solid fa-chromecast"></i> 3. Direct Stream URL</div>
+                    <div class="form-group">
+                        <label for="mediaUrl">Web Stream URL (MP4, MKV, WebM, HLS, DASH, RTSP)</label>
                         <div class="input-action">
-                            <input type="text" id="mediaUrl" placeholder="MP4 / HLS URL" value="https://storage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4" />
-                            <button class="primary" onclick="sendLoadMedia()" title="Load Media" aria-label="Load Media"><i class="fa-solid fa-play"></i></button>
+                            <input type="text" id="mediaUrl" placeholder="Direct Stream URL" value="https://storage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4" />
+                            <button class="primary" onclick="sendLoadMedia()" title="Load Media" aria-label="Load Media"><i class="fa-solid fa-play"></i> Stream</button>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Remote Controller -->
-            <div class="card" style="display: flex; flex-direction: column; align-items: center; justify-content: space-between;">
-                <div class="card-title" style="align-self: flex-start; margin-bottom: 24px;"><i class="fa-solid fa-gamepad"></i> Controller</div>
-                
-                <div class="remote-container">
-                    <div class="action-row">
-                        <button class="action-btn" onclick="sendAction('BACK')"><i class="fa-solid fa-arrow-left"></i> Back</button>
-                        <button class="action-btn" onclick="sendAction('HOME')"><i class="fa-solid fa-house"></i> Home</button>
+            <!-- Right Column: Remote Controller & Videos Library -->
+            <div class="card-column" style="display: flex; flex-direction: column; gap: 20px;">
+                <!-- 4. TV Remote Controller Card -->
+                <div class="card" style="display: flex; flex-direction: column; align-items: center;">
+                    <div class="card-title" style="align-self: flex-start; margin-bottom: 20px;"><i class="fa-solid fa-gamepad"></i> 4. Remote Controller</div>
+                    
+                    <div class="remote-container">
+                        <div class="action-row">
+                            <button class="action-btn" onclick="sendAction('BACK')"><i class="fa-solid fa-arrow-left"></i> Back</button>
+                            <button class="action-btn" onclick="sendAction('HOME')"><i class="fa-solid fa-house"></i> Home</button>
+                        </div>
+
+                        <div class="dpad">
+                            <button class="dpad-btn dpad-up" onclick="sendAction('DPAD_UP')" title="Up" aria-label="Up"><i class="fa-solid fa-caret-up"></i></button>
+                            <button class="dpad-btn dpad-left" onclick="sendAction('DPAD_LEFT')" title="Left" aria-label="Left"><i class="fa-solid fa-caret-left"></i></button>
+                            <button class="dpad-center" onclick="sendAction('DPAD_CENTER')" title="OK / Select" aria-label="OK">OK</button>
+                            <button class="dpad-btn dpad-right" onclick="sendAction('DPAD_RIGHT')" title="Right" aria-label="Right"><i class="fa-solid fa-caret-right"></i></button>
+                            <button class="dpad-btn dpad-down" onclick="sendAction('DPAD_DOWN')" title="Down" aria-label="Down"><i class="fa-solid fa-caret-down"></i></button>
+                        </div>
+
+                        <div class="media-controls">
+                            <button class="media-btn" onclick="sendAction('SEEK_BACKWARD')" title="Seek Backward 10s" aria-label="Seek Backward"><i class="fa-solid fa-backward-step"></i></button>
+                            <button class="media-btn play" onclick="sendAction('PLAY')" title="Play" aria-label="Play"><i class="fa-solid fa-play"></i></button>
+                            <button class="media-btn" onclick="sendAction('PAUSE')" title="Pause" aria-label="Pause"><i class="fa-solid fa-pause"></i></button>
+                            <button class="media-btn" onclick="sendAction('SEEK_FORWARD')" title="Seek Forward 10s" aria-label="Seek Forward"><i class="fa-solid fa-forward-step"></i></button>
+                        </div>
+
+                        <div class="action-row" style="margin-top: 4px;">
+                            <button class="action-btn" onclick="sendAction('VOLUME_DOWN')"><i class="fa-solid fa-volume-low"></i> Vol -</button>
+                            <button class="action-btn" onclick="sendAction('MUTE')" title="Mute" aria-label="Mute"><i class="fa-solid fa-volume-xmark"></i></button>
+                            <button class="action-btn" onclick="sendAction('VOLUME_UP')"><i class="fa-solid fa-volume-high"></i> Vol +</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. Videos Stored on TV Library Card -->
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
+                        <div class="card-title" style="margin-bottom: 0;"><i class="fa-solid fa-film"></i> 5. Stored Videos on TV</div>
+                        <div style="display: flex; gap: 6px;">
+                            <button class="small" onclick="fetchUploadedVideos()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+                            <button class="danger small" onclick="clearAllVideos()"><i class="fa-solid fa-trash"></i> Clear All</button>
+                        </div>
                     </div>
 
-                    <div class="dpad">
-                        <button class="dpad-btn dpad-up" onclick="sendAction('DPAD_UP')" title="Up" aria-label="Up"><i class="fa-solid fa-caret-up"></i></button>
-                        <button class="dpad-btn dpad-left" onclick="sendAction('DPAD_LEFT')" title="Left" aria-label="Left"><i class="fa-solid fa-caret-left"></i></button>
-                        <button class="dpad-center" onclick="sendAction('DPAD_CENTER')" title="OK / Select" aria-label="OK">OK</button>
-                        <button class="dpad-btn dpad-right" onclick="sendAction('DPAD_RIGHT')" title="Right" aria-label="Right"><i class="fa-solid fa-caret-right"></i></button>
-                        <button class="dpad-btn dpad-down" onclick="sendAction('DPAD_DOWN')" title="Down" aria-label="Down"><i class="fa-solid fa-caret-down"></i></button>
-                    </div>
-
-                    <div class="media-controls">
-                        <button class="media-btn" onclick="sendAction('SEEK_BACKWARD')" title="Seek Backward 10s" aria-label="Seek Backward"><i class="fa-solid fa-backward-step"></i></button>
-                        <button class="media-btn play" onclick="sendAction('PLAY')" title="Play" aria-label="Play"><i class="fa-solid fa-play"></i></button>
-                        <button class="media-btn" onclick="sendAction('PAUSE')" title="Pause" aria-label="Pause"><i class="fa-solid fa-pause"></i></button>
-                        <button class="media-btn" onclick="sendAction('SEEK_FORWARD')" title="Seek Forward 10s" aria-label="Seek Forward"><i class="fa-solid fa-forward-step"></i></button>
-                    </div>
-
-                    <div class="action-row" style="margin-top: 8px;">
-                        <button class="action-btn" onclick="sendAction('VOLUME_DOWN')"><i class="fa-solid fa-volume-low"></i> Vol -</button>
-                        <button class="action-btn" onclick="sendAction('MUTE')" title="Mute" aria-label="Mute"><i class="fa-solid fa-volume-xmark"></i></button>
-                        <button class="action-btn" onclick="sendAction('VOLUME_UP')"><i class="fa-solid fa-volume-high"></i> Vol +</button>
+                    <div id="videoLibraryList" style="max-height: 280px; overflow-y: auto;">
+                        <div style="color: var(--text-muted); font-size: 13px; text-align: center; padding: 20px;">
+                            No uploaded videos on TV yet. Use section 2 to upload videos!
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
+        <!-- Full-width Activity Log Card -->
         <div class="card" style="margin-top: 20px;">
             <div class="log-header">
-                <div class="card-title" style="margin: 0;"><i class="fa-solid fa-terminal"></i> Terminal Logs</div>
-                <button onclick="clearLog()" style="padding: 6px 12px; font-size: 12px;" title="Clear Logs" aria-label="Clear Logs"><i class="fa-solid fa-trash-can"></i> Clear</button>
+                <div class="card-title" style="margin-bottom: 0;"><i class="fa-solid fa-terminal"></i> Activity Log & Server Events</div>
+                <button class="small" onclick="clearLog()">Clear Log</button>
             </div>
             <div class="log-box" id="logBox"></div>
         </div>
     </div>
 
     <script>
-        let ws;
+        let ws = null;
+        let selectedFile = null;
+        let uploadXhr = null;
         let isExplicitDisconnect = false;
         let reconnectTimer = null;
+
         const logBox = document.getElementById('logBox');
         const statusBadge = document.getElementById('status');
         const isHosted = ['http:', 'https:'].includes(window.location.protocol);
@@ -495,12 +690,11 @@
         document.getElementById('portInput').value = defaultPort;
 
         function log(message, color = "var(--text-main)") {
-            const time = new Date().toLocaleTimeString([], { hour12: false });
-            const item = document.createElement('div');
-            item.className = 'log-item';
-            item.style.color = color;
-            item.innerHTML = `<span class="log-time">[${time}]</span> ${message}`;
-            logBox.appendChild(item);
+            const time = new Date().toLocaleTimeString();
+            const logItem = document.createElement('div');
+            logItem.className = 'log-item';
+            logItem.innerHTML = `<span class="log-time">[${time}]</span> <span style="color: ${color}">${message}</span>`;
+            logBox.appendChild(logItem);
             logBox.scrollTop = logBox.scrollHeight;
         }
 
@@ -511,7 +705,29 @@
         function getTargetEndpoint() {
             const ip = document.getElementById('ipInput').value.trim() || defaultHost;
             const port = document.getElementById('portInput').value.trim() || defaultPort;
-            return { ip, port, url: `${socketProtocol}//${ip}:${port}/control` };
+            const httpProto = window.location.protocol === 'https:' ? 'https:' : 'http:';
+            return {
+                ip,
+                port,
+                url: `${socketProtocol}//${ip}:${port}/control`,
+                httpBase: `${httpProto}//${ip}:${port}`
+            };
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        function formatTimeMs(ms) {
+            if (!ms || ms <= 0) return '00:00';
+            const totalSec = Math.floor(ms / 1000);
+            const m = Math.floor(totalSec / 60);
+            const s = totalSec % 60;
+            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
         }
 
         function updateStatus(state, ip, port) {
@@ -521,18 +737,18 @@
             if (state === 'connected') {
                 statusBadge.innerHTML = `<i class="fa-solid fa-check-circle"></i> Connected (${ip}:${port})` + disconnectBtn;
                 statusBadge.className = "status-badge status-connected";
-                if(connCard) connCard.style.display = 'block';
             } else if (state === 'authenticated') {
                 statusBadge.innerHTML = `<i class="fa-solid fa-shield-check"></i> Authenticated (${ip}:${port})` + disconnectBtn;
                 statusBadge.className = "status-badge status-connected";
-                if(connCard) connCard.style.display = 'none';
             } else {
                 statusBadge.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> Disconnected`;
                 statusBadge.className = "status-badge";
-                if(connCard) connCard.style.display = 'block';
             }
         }
 
+        // ==========================================
+        // 1. WebSocket Connection & Authentication
+        // ==========================================
         function connect() {
             isExplicitDisconnect = false;
             if (ws) {
@@ -553,16 +769,16 @@
             ws.onopen = () => {
                 updateStatus('connected', ip, port);
                 log(`<b>Connected!</b> Server at <b>${url}</b>`, "var(--success)");
+                fetchUploadedVideos();
                 
                 // Auto-attempt auth if token exists
-                if(localStorage.getItem("mobplayer_token")) {
+                if (localStorage.getItem("mobplayer_token")) {
                     sendAuthRequest();
                 }
             };
             
             ws.onmessage = (event) => {
                 const rawData = event.data;
-                // Truncate long logs slightly for better readability
                 const displayData = rawData.length > 100 ? rawData.substring(0, 100) + '...' : rawData;
                 log(`&lt;-- ${displayData}`, "var(--text-muted)");
                 
@@ -571,12 +787,17 @@
                     if (data.type === "AUTH_SUCCESS") {
                         updateStatus('authenticated', ip, port);
                         localStorage.setItem("mobplayer_token", data.payload);
-                        log("<b>Auth Success!</b> Token saved.", "var(--success)");
+                        log("<b>Auth Success!</b> Token saved: " + data.payload, "var(--success)");
+                        fetchUploadedVideos();
                     } else if (data.type === "AUTH_FAILED") {
                         log("❌ Auth Failed: " + data.payload, "var(--danger)");
                     } else if (data.type === "PIN_REQUIRED") {
                         log("🔢 PIN required! Enter the 4-digit PIN shown on TV.", "#f59e0b");
-                        document.getElementById('pinInput').focus();
+                        const pinInput = document.getElementById('pinInput');
+                        if (pinInput) pinInput.focus();
+                    } else if (data.type === "STATE_UPDATE") {
+                        // Throttled sync so playback progress ticks don't spam GET /api/videos
+                        throttledFetchVideos(5000);
                     }
                 } catch(e) {}
             };
@@ -612,7 +833,7 @@
         }
 
         function sendAuthRequest() {
-            if (!ws || ws.readyState !== WebSocket.OPEN) return log("Not connected.", "var(--danger)");
+            if (!ws || ws.readyState !== WebSocket.OPEN) return log("Not connected to TV.", "var(--danger)");
             const token = localStorage.getItem("mobplayer_token") || "no-token-yet";
             const msg = JSON.stringify({ type: "AUTH_REQUEST", payload: token });
             ws.send(msg);
@@ -620,17 +841,17 @@
         }
 
         function sendPinSubmit() {
-            if (!ws || ws.readyState !== WebSocket.OPEN) return log("Not connected.", "var(--danger)");
+            if (!ws || ws.readyState !== WebSocket.OPEN) return log("Not connected to TV.", "var(--danger)");
             const pin = document.getElementById('pinInput').value.trim();
-            if (!pin) return log("Please enter a PIN.", "var(--danger)");
+            if (!pin) return log("Please enter a PIN first.", "var(--danger)");
             const msg = JSON.stringify({ type: "PIN_SUBMIT", payload: pin });
             ws.send(msg);
             log(`--&gt; PIN submitted`, "#f59e0b");
-            document.getElementById('pinInput').value = ''; // clear pin
+            document.getElementById('pinInput').value = '';
         }
 
         function sendAction(actionName) {
-            if (!ws || ws.readyState !== WebSocket.OPEN) return log("Not connected.", "var(--danger)");
+            if (!ws || ws.readyState !== WebSocket.OPEN) return log("Not connected to TV.", "var(--danger)");
             const msg = JSON.stringify({
                 type: "COMMAND",
                 payload: JSON.stringify({ action: actionName })
@@ -638,14 +859,13 @@
             ws.send(msg);
             log(`--&gt; Action: <b>${actionName}</b>`, "var(--primary)");
             
-            // Haptic feedback if supported by browser/device
             if (navigator.vibrate) {
                 navigator.vibrate(50);
             }
         }
 
         function sendLoadMedia() {
-            if (!ws || ws.readyState !== WebSocket.OPEN) return log("Not connected.", "var(--danger)");
+            if (!ws || ws.readyState !== WebSocket.OPEN) return log("Not connected to TV.", "var(--danger)");
             const url = document.getElementById('mediaUrl').value.trim();
             if (!url) return log("Please provide a video URL.", "var(--danger)");
             const msg = JSON.stringify({
@@ -656,9 +876,446 @@
             log(`--&gt; Load Media: ${url}`, "#8b5cf6");
         }
 
-        // Add keyboard support for D-Pad
+        // ==========================================
+        // 2. Video File Selection & Fast-Start Check
+        // ==========================================
+        function getFormatInfo(filename) {
+            const ext = (filename || '').split('.').pop().toLowerCase();
+            switch (ext) {
+                case 'mp4':
+                case 'm4v':
+                case 'mov':
+                    return { name: ext.toUpperCase(), isMp4: true };
+                case 'mkv':
+                    return { name: 'Matroska (MKV)', isMp4: false };
+                case 'webm':
+                    return { name: 'WebM', isMp4: false };
+                case 'ts':
+                case 'm2ts':
+                case 'mts':
+                    return { name: 'MPEG-TS', isMp4: false };
+                case 'avi':
+                    return { name: 'AVI', isMp4: false };
+                case 'flv':
+                    return { name: 'FLV', isMp4: false };
+                case 'wmv':
+                    return { name: 'WMV', isMp4: false };
+                case '3gp':
+                case '3g2':
+                    return { name: '3GPP', isMp4: true };
+                case 'ogv':
+                case 'ogg':
+                    return { name: 'Ogg', isMp4: false };
+                case 'mpg':
+                case 'mpeg':
+                case 'vob':
+                    return { name: 'MPEG', isMp4: false };
+                case 'mp3':
+                case 'aac':
+                case 'wav':
+                case 'flac':
+                case 'm4a':
+                case 'opus':
+                    return { name: 'Audio (' + ext.toUpperCase() + ')', isMp4: false };
+                default:
+                    return { name: ext.toUpperCase() || 'Media', isMp4: false };
+            }
+        }
+
+        async function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            selectedFile = file;
+
+            document.getElementById('selectedFileInfo').style.display = 'flex';
+            document.getElementById('selectedFileName').textContent = file.name;
+            document.getElementById('selectedFileSize').textContent = `${formatBytes(file.size)} • ${file.type || 'media'}`;
+            
+            const defaultTitle = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+            document.getElementById('videoTitleInput').value = defaultTitle;
+
+            document.getElementById('btnInstantPlay').disabled = false;
+            document.getElementById('btnUploadOnly').disabled = false;
+
+            const badge = document.getElementById('fastStartBadge');
+            badge.textContent = "Analyzing...";
+            badge.className = "badge badge-blue";
+
+            const fmt = getFormatInfo(file.name);
+            if (fmt.isMp4) {
+                const isFast = await checkIsFastStart(file);
+                if (isFast) {
+                    badge.textContent = `⚡ Fast-Start Ready (${fmt.name})`;
+                    badge.className = "badge badge-green";
+                } else {
+                    badge.textContent = `⚡ Auto Fast-Start (${fmt.name})`;
+                    badge.className = "badge badge-green";
+                }
+            } else {
+                badge.textContent = `⚡ Stream Ready (${fmt.name})`;
+                badge.className = "badge badge-green";
+            }
+        }
+
+        async function checkIsFastStart(file) {
+            try {
+                const slice = file.slice(0, 131072);
+                const buffer = await slice.arrayBuffer();
+                const view = new DataView(buffer);
+                let offset = 0;
+                while (offset < view.byteLength - 8) {
+                    const size = view.getUint32(offset);
+                    const type = String.fromCharCode(
+                        view.getUint8(offset + 4),
+                        view.getUint8(offset + 5),
+                        view.getUint8(offset + 6),
+                        view.getUint8(offset + 7)
+                    );
+                    if (type === 'moov') return true;
+                    if (type === 'mdat') return false;
+                    if (size <= 0) break;
+                    offset += size;
+                }
+            } catch (e) {}
+            return true;
+        }
+
+        function patchMoovOffsets(buffer, shift) {
+            const view = new DataView(buffer);
+            const containers = new Set(['moov', 'trak', 'edts', 'mdia', 'minf', 'dinf', 'stbl']);
+
+            function walk(start, end) {
+                let pos = start;
+                while (pos + 8 <= end) {
+                    let bsize = view.getUint32(pos);
+                    const btype = String.fromCharCode(
+                        view.getUint8(pos + 4), view.getUint8(pos + 5),
+                        view.getUint8(pos + 6), view.getUint8(pos + 7)
+                    );
+                    let hdr = 8;
+                    if (bsize === 1) {
+                        const high = view.getUint32(pos + 8);
+                        const low = view.getUint32(pos + 12);
+                        bsize = high * 4294967296 + low;
+                        hdr = 16;
+                    }
+                    if (bsize <= 0 || pos + bsize > end) {
+                        bsize = end - pos;
+                    }
+
+                    if (containers.has(btype)) {
+                        walk(pos + hdr, pos + bsize);
+                    } else if (btype === 'stco') {
+                        const count = view.getUint32(pos + 12);
+                        let p = pos + 16;
+                        for (let i = 0; i < count; i++) {
+                            const val = view.getUint32(p);
+                            view.setUint32(p, val + shift);
+                            p += 4;
+                        }
+                    } else if (btype === 'co64') {
+                        const count = view.getUint32(pos + 12);
+                        let p = pos + 16;
+                        const shiftBig = BigInt(shift);
+                        for (let i = 0; i < count; i++) {
+                            const val = view.getBigUint64(p);
+                            view.setBigUint64(p, val + shiftBig);
+                            p += 8;
+                        }
+                    }
+                    pos += bsize;
+                }
+            }
+
+            walk(0, buffer.byteLength);
+        }
+
+        async function ensureFastStart(file) {
+            try {
+                const name = (file.name || '').toLowerCase();
+                const isMp4 = name.endsWith('.mp4') || name.endsWith('.m4v') || name.endsWith('.mov') || (file.type && file.type.includes('mp4'));
+                if (!isMp4) return file;
+
+                let offset = 0;
+                let mdatOffset = -1;
+                let moovOffset = -1;
+                let moovSize = 0;
+
+                while (offset < file.size) {
+                    const slice = file.slice(offset, Math.min(offset + 16, file.size));
+                    const buf = await slice.arrayBuffer();
+                    if (buf.byteLength < 8) break;
+                    const view = new DataView(buf);
+                    let size = view.getUint32(0);
+                    const type = String.fromCharCode(
+                        view.getUint8(4), view.getUint8(5), view.getUint8(6), view.getUint8(7)
+                    );
+                    if (size === 1) {
+                        if (buf.byteLength < 16) break;
+                        const high = view.getUint32(8);
+                        const low = view.getUint32(12);
+                        size = high * 4294967296 + low;
+                    } else if (size === 0) {
+                        size = file.size - offset;
+                    }
+
+                    if (type === 'moov') {
+                        moovOffset = offset;
+                        moovSize = size;
+                        break;
+                    } else if (type === 'mdat') {
+                        mdatOffset = offset;
+                    }
+                    if (size <= 0) break;
+                    offset += size;
+                }
+
+                if (moovOffset === -1 || mdatOffset === -1 || moovOffset < mdatOffset) {
+                    return file;
+                }
+
+                log(`⚙️ Relocating MP4 metadata to front for instant streaming...`, "var(--primary)");
+                const moovSlice = file.slice(moovOffset, moovOffset + moovSize);
+                const moovBuf = await moovSlice.arrayBuffer();
+                patchMoovOffsets(moovBuf, moovSize);
+
+                const parts = [];
+                if (mdatOffset > 0) {
+                    parts.push(file.slice(0, mdatOffset));
+                }
+                parts.push(moovBuf);
+                parts.push(file.slice(mdatOffset, moovOffset));
+                if (moovOffset + moovSize < file.size) {
+                    parts.push(file.slice(moovOffset + moovSize));
+                }
+
+                const fastStartBlob = new Blob(parts, { type: file.type || 'video/mp4' });
+                log(`⚡ <b>Fast-Start Ready:</b> Video will stream on TV immediately!`, "var(--success)");
+                return fastStartBlob;
+            } catch (err) {
+                console.warn("Fast-start conversion skipped:", err);
+                return file;
+            }
+        }
+
+        // ==========================================
+        // 3. Progressive Video Upload & Stream
+        // ==========================================
+        async function uploadAndPlay(playImmediately) {
+            if (!selectedFile) return alert("Please select a media file first.");
+
+            const { httpBase } = getTargetEndpoint();
+            const token = localStorage.getItem("mobplayer_token") || "";
+            const title = document.getElementById('videoTitleInput').value.trim() || selectedFile.name;
+
+            const progressSection = document.getElementById('uploadProgressSection');
+            const progressBar = document.getElementById('uploadProgressBar');
+            const statusText = document.getElementById('uploadStatusText');
+            const percentText = document.getElementById('uploadPercentText');
+            const bytesText = document.getElementById('uploadBytesText');
+            const speedText = document.getElementById('uploadSpeedText');
+
+            progressSection.style.display = 'block';
+            progressBar.style.width = '0%';
+            percentText.textContent = '0%';
+            statusText.textContent = playImmediately ? "Optimizing & streaming to TV..." : "Uploading to TV...";
+
+            let uploadPayload = selectedFile;
+            if (playImmediately) {
+                uploadPayload = await ensureFastStart(selectedFile);
+            }
+
+            const url = `${httpBase}/api/upload?playImmediately=${playImmediately}&title=${encodeURIComponent(title)}&totalSize=${uploadPayload.size}&fileName=${encodeURIComponent(selectedFile.name)}`;
+
+            uploadXhr = new XMLHttpRequest();
+            let startTime = Date.now();
+            let hasTriggeredPlayState = false;
+
+            uploadXhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) {
+                    const percent = Math.round((e.loaded / e.total) * 100);
+                    progressBar.style.width = percent + '%';
+                    percentText.textContent = percent + '%';
+                    bytesText.textContent = `${formatBytes(e.loaded)} / ${formatBytes(e.total)}`;
+
+                    const elapsedSec = (Date.now() - startTime) / 1000;
+                    if (elapsedSec > 0.5) {
+                        const speed = e.loaded / elapsedSec;
+                        speedText.textContent = `${formatBytes(speed)}/s`;
+                    }
+
+                    const triggerBytes = Math.min(65536, uploadPayload.size);
+                    if (playImmediately && !hasTriggeredPlayState && e.loaded >= triggerBytes) {
+                        hasTriggeredPlayState = true;
+                        statusText.textContent = "🟢 Playing on TV! (Streaming remainder in background)";
+                        log(`⚡ <b>Progressive Streaming Started!</b> TV began playback immediately.`, "var(--success)");
+                    }
+                }
+            };
+
+            uploadXhr.onload = () => {
+                if (uploadXhr.status >= 200 && uploadXhr.status < 300) {
+                    progressBar.style.width = '100%';
+                    percentText.textContent = '100%';
+                    statusText.textContent = "✅ Upload complete! Saved to TV.";
+                    log(`✅ <b>Upload Complete!</b> Video "${title}" is saved in the TV library.`, "var(--success)");
+                    fetchUploadedVideos();
+                } else {
+                    statusText.textContent = `❌ Upload failed (${uploadXhr.status})`;
+                    log(`❌ Upload failed with status ${uploadXhr.status}: ${uploadXhr.responseText}`, "var(--danger)");
+                }
+            };
+
+            uploadXhr.onerror = () => {
+                statusText.textContent = "❌ Network error during upload";
+                log("❌ Network error occurred during video upload.", "var(--danger)");
+            };
+
+            uploadXhr.open('POST', url, true);
+            if (token) uploadXhr.setRequestHeader('X-Auth-Token', token);
+            uploadXhr.setRequestHeader('X-File-Size', uploadPayload.size.toString());
+            uploadXhr.setRequestHeader('X-File-Name', encodeURIComponent(selectedFile.name));
+            uploadXhr.setRequestHeader('Content-Type', uploadPayload.type || 'application/octet-stream');
+            uploadXhr.send(uploadPayload);
+            log(`🚀 Starting direct stream upload of <b>${selectedFile.name}</b> (${formatBytes(uploadPayload.size)})...`, "var(--primary)");
+        }
+
+        // ==========================================
+        // 4. Stored Videos Library Management
+        // ==========================================
+        let lastLibraryFetch = 0;
+        function throttledFetchVideos(minIntervalMs = 5000) {
+            const now = Date.now();
+            if (now - lastLibraryFetch >= minIntervalMs) {
+                lastLibraryFetch = now;
+                fetchUploadedVideos();
+            }
+        }
+
+        async function fetchUploadedVideos() {
+            lastLibraryFetch = Date.now();
+            const { httpBase } = getTargetEndpoint();
+            const token = localStorage.getItem("mobplayer_token") || "";
+
+            try {
+                const res = await fetch(`${httpBase}/api/videos`, {
+                    headers: token ? { 'X-Auth-Token': token } : {}
+                });
+                if (!res.ok) return;
+                const videos = await res.json();
+                renderVideoLibrary(videos);
+            } catch (e) {}
+        }
+
+        function renderVideoLibrary(videos) {
+            const listEl = document.getElementById('videoLibraryList');
+            if (!videos || videos.length === 0) {
+                listEl.innerHTML = `<div style="color: var(--text-muted); font-size: 13px; text-align: center; padding: 20px;">No uploaded videos on TV yet. Use section 2 to upload videos!</div>`;
+                return;
+            }
+
+            let html = '';
+            videos.forEach(v => {
+                const progressPct = Math.round((v.progress || 0) * 100);
+                const hasProgress = v.lastPlayedPositionMs > 5000 && !v.isCompleted;
+                const resumeLabel = hasProgress ? `▶ Resume (${formatTimeMs(v.lastPlayedPositionMs)})` : `▶ Play`;
+
+                html += `
+                <div class="video-item">
+                    <div class="video-item-header">
+                        <div>
+                            <span class="video-item-title">${escapeHtml(v.title)}</span>
+                            <div class="video-item-meta">${escapeHtml(v.originalFileName)} • ${v.fileSizeFormatted}</div>
+                        </div>
+                        <span class="badge ${hasProgress ? 'badge-green' : 'badge-blue'}">${hasProgress ? progressPct + '% WATCHED' : 'READY'}</span>
+                    </div>
+                    
+                    ${v.durationMs > 0 ? `
+                        <div style="font-size: 11px; color: var(--text-muted); display: flex; justify-content: space-between;">
+                            <span>Progress: ${formatTimeMs(v.lastPlayedPositionMs)} / ${formatTimeMs(v.durationMs)}</span>
+                            <span>${progressPct}%</span>
+                        </div>
+                        <div class="progress-track" style="margin-top: 2px;">
+                            <div class="progress-fill" style="width: ${progressPct}%;"></div>
+                        </div>
+                    ` : ''}
+
+                    <div style="display: flex; gap: 6px; margin-top: 4px;">
+                        <button class="success small" onclick="playStoredVideo('${v.id}', true)">${resumeLabel}</button>
+                        <button class="small" onclick="playStoredVideo('${v.id}', false)">↺ Restart</button>
+                        <button class="danger small" onclick="deleteStoredVideo('${v.id}')"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                </div>
+                `;
+            });
+            listEl.innerHTML = html;
+        }
+
+        async function playStoredVideo(id, resume) {
+            const { httpBase } = getTargetEndpoint();
+            const token = localStorage.getItem("mobplayer_token") || "";
+
+            try {
+                const res = await fetch(`${httpBase}/api/videos/${id}/play?resume=${resume}`, {
+                    method: 'POST',
+                    headers: token ? { 'X-Auth-Token': token } : {}
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    log(`▶ Started playback of video on TV${data.resumedAtMs > 0 ? ` (Resumed from ${formatTimeMs(data.resumedAtMs)})` : ''}`, "var(--success)");
+                    fetchUploadedVideos();
+                }
+            } catch (e) {
+                log(`Failed to trigger playback: ${e.message}`, "var(--danger)");
+            }
+        }
+
+        async function deleteStoredVideo(id) {
+            if (!confirm("Are you sure you want to delete this video from the TV?")) return;
+            const { httpBase } = getTargetEndpoint();
+            const token = localStorage.getItem("mobplayer_token") || "";
+
+            try {
+                const res = await fetch(`${httpBase}/api/videos/${id}`, {
+                    method: 'DELETE',
+                    headers: token ? { 'X-Auth-Token': token } : {}
+                });
+                log(`🗑 Video deleted from TV storage.`, "#f59e0b");
+                fetchUploadedVideos();
+            } catch (e) {
+                log(`Failed to delete video: ${e.message}`, "var(--danger)");
+            }
+        }
+
+        async function clearAllVideos() {
+            if (!confirm("Are you sure you want to delete ALL uploaded videos from the TV?")) return;
+            const { httpBase } = getTargetEndpoint();
+            const token = localStorage.getItem("mobplayer_token") || "";
+
+            try {
+                const res = await fetch(`${httpBase}/api/videos`, {
+                    method: 'DELETE',
+                    headers: token ? { 'X-Auth-Token': token } : {}
+                });
+                const data = await res.json();
+                log(`🗑 Cleared all (${data.deletedCount || 0}) videos from TV storage.`, "#f59e0b");
+                fetchUploadedVideos();
+            } catch (e) {
+                log(`Failed to clear videos: ${e.message}`, "var(--danger)");
+            }
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>"']/g, function(m) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+            });
+        }
+
+        // ==========================================
+        // 5. Keyboard & Lifecycle Listeners
+        // ==========================================
         document.addEventListener('keydown', (e) => {
-            // Only trigger if not typing in an input
             if (document.activeElement.tagName === 'INPUT') return;
             
             switch(e.key) {
@@ -672,10 +1329,9 @@
             }
         });
 
-        // Specific Enter key listeners for form inputs
-        const pinInput = document.getElementById('pinInput');
-        if (pinInput) {
-            pinInput.addEventListener('keydown', (e) => {
+        const pinInputEl = document.getElementById('pinInput');
+        if (pinInputEl) {
+            pinInputEl.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
                     sendPinSubmit();
@@ -683,9 +1339,9 @@
             });
         }
 
-        const mediaUrlInput = document.getElementById('mediaUrl');
-        if (mediaUrlInput) {
-            mediaUrlInput.addEventListener('keydown', (e) => {
+        const mediaUrlInputEl = document.getElementById('mediaUrl');
+        if (mediaUrlInputEl) {
+            mediaUrlInputEl.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
                     sendLoadMedia();
@@ -705,7 +1361,6 @@
             }
         });
         
-        // Auto-connect on page load
         window.onload = () => {
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.has('ip')) {
@@ -714,7 +1369,6 @@
             connect();
         };
 
-        // Auto-disconnect on minimize/background and auto-reconnect + auto-auth on revisit
         function handleVisibilityHidden() {
             if (isExplicitDisconnect) return;
             if (reconnectTimer) {
@@ -729,11 +1383,12 @@
             }
         }
 
+        let lastReconnectAttempt = 0;
+
         function handleRevisit() {
             if (isExplicitDisconnect) return;
             if (document.visibilityState === 'hidden') return;
             
-            // If already connected or connecting, do not duplicate
             if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
 
             if (reconnectTimer) clearTimeout(reconnectTimer);
@@ -741,11 +1396,16 @@
                 reconnectTimer = null;
                 if (!isExplicitDisconnect && document.visibilityState !== 'hidden') {
                     if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+                        const now = Date.now();
+                        if (now - lastReconnectAttempt < 1000) {
+                            return; // Minimum 1000ms cooldown between reconnection bursts
+                        }
+                        lastReconnectAttempt = now;
                         log("Browser active: reconnecting to TV...", "var(--primary)");
                         connect();
                     }
                 }
-            }, 150);
+            }, 250);
         }
 
         document.addEventListener('visibilitychange', () => {

@@ -21,6 +21,7 @@ import com.mobplayer.tv.ui.theme.TvColors
 @Composable
 fun TvHomeScreen(
     connectedDeviceName: String?,
+    uploadedVideos: List<com.mobplayer.tv.models.VideoMetadata> = emptyList(),
     onPlayMedia: (MediaItemModel) -> Unit,
     onDisconnect: () -> Unit,
     modifier: Modifier = Modifier
@@ -33,6 +34,44 @@ fun TvHomeScreen(
 
     var selectedTab by remember { mutableStateOf(tabHome) }
     val columnState = rememberLazyListState()
+
+    val uploadedRail = remember(uploadedVideos) {
+        if (uploadedVideos.isEmpty()) null
+        else {
+            val items = uploadedVideos.map { meta ->
+                val progressVal = if (meta.progress > 0f) meta.progress else null
+                val remainingStr = if (meta.durationMs > 0 && meta.lastPlayedPositionMs > 0) {
+                    val remMin = (meta.remainingMs / 60000).toInt()
+                    if (remMin > 0) "$remMin min left" else "Almost finished"
+                } else null
+
+                MediaItemModel(
+                    id = meta.id,
+                    title = meta.title,
+                    subtitle = if (progressVal != null) "${(meta.progress * 100).toInt()}% watched" else meta.fileSizeFormatted,
+                    description = "Uploaded video: ${meta.originalFileName}",
+                    posterUrl = "",
+                    backdropUrl = "",
+                    genres = listOf("My Uploads", meta.mimeType.substringAfterLast('/')),
+                    year = "Local",
+                    duration = if (meta.durationMs > 0) String.format("%02d:%02d", meta.durationMs / 60000, (meta.durationMs / 1000) % 60) else meta.fileSizeFormatted,
+                    rating = "HD",
+                    badge = if (progressVal != null) "RESUME" else "NEW",
+                    progress = progressVal,
+                    remainingTime = remainingStr,
+                    videoUrl = meta.fileName,
+                    gradientColors = listOf(0xFF0F2027, 0xFF203A43, 0xFF2C5364)
+                )
+            }
+            com.mobplayer.tv.data.models.MediaRailModel(
+                id = "rail_uploaded_videos",
+                title = "Uploaded Videos",
+                subtitle = "${uploadedVideos.size} videos stored on TV",
+                cardType = CardType.CONTINUE_WATCHING,
+                items = items
+            )
+        }
+    }
 
     val railsToDisplay = remember(selectedTab, tabMovies, tabShows, tabLiveTv, tabMyList) {
         when (selectedTab) {
@@ -75,7 +114,19 @@ fun TvHomeScreen(
                 }
             }
 
-            // 3. Content Rails (Continue Watching, Top 10 Movies, Popular Series, Live TV)
+            // 3. Uploaded Videos Rail (shown on Home and My List)
+            if (uploadedRail != null && (selectedTab == tabHome || selectedTab == tabMyList)) {
+                item(key = "rail_uploaded_videos") {
+                    TvContentRail(
+                        rail = uploadedRail,
+                        onItemClick = { item ->
+                            onPlayMedia(item)
+                        }
+                    )
+                }
+            }
+
+            // 4. Content Rails (Continue Watching, Top 10 Movies, Popular Series, Live TV)
             items(
                 items = railsToDisplay,
                 key = { it.id }
