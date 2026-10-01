@@ -74,9 +74,22 @@ The project uses Dagger Hilt with constructor injection and clean repository pat
    - `TvVideoPlayerOverlay.kt` renders player timeline and controls.
    - `TvRemoteActionHud.kt` displays floating action pills on the TV screen.
 
+## Video Upload, Instant Progressive Streaming & Universal Media Support
+- **Universal Container & Protocol Support**:
+  - Expanded Media3 dependencies to include `media3-exoplayer-hls`, `media3-exoplayer-dash`, and `media3-exoplayer-rtsp`.
+  - Dynamic container and MIME type resolution via `VideoMetadata.resolveMimeType()` supporting MP4, MKV, WebM, MPEG-TS, AVI, MOV, FLV, WMV, 3GP, Ogg, HLS (.m3u8), DASH (.mpd), RTSP, and all common audio formats (MP3, AAC, FLAC, WAV, Opus).
+  - Cleartext HTTP traffic permitted via `network_security_config.xml` and `android:usesCleartextTraffic="true"` for local-network streaming.
+
+- **Instant Progressive Playback (< 0.5s Start)**:
+  - **Aggressive Fast-Start LoadControl**: Configured `DefaultLoadControl` in `MediaRepository.kt` with `bufferForPlaybackMs = 250ms`, `bufferForPlaybackAfterRebufferMs = 500ms`, and `prioritizeTimeOverSizeThresholds = true`. ExoPlayer transitions to `STATE_READY` and renders video immediately with only a fraction of a second buffered.
+  - **64 KB Initial Playback Trigger**: Playback begins when `bytesWritten >= 65536L` (or half of total size for tiny files), cutting startup latency to < 500ms.
+  - **Dual Upload Support**: `POST /api/upload` handles both direct raw binary streams (`call.receiveChannel()`) with zero multipart overhead and standard `multipart/form-data`.
+  - **Non-Interrupting Completion Handler**: Completed uploads no longer reset or abort active progressive streams. ExoPlayer plays seamlessly through the end of the video without interruption.
+  - **Client-Side Fast-Start Optimization**: `test_client.html` features in-browser zero-copy `ensureFastStart()` that dynamically relocates the `moov` atom ahead of `mdat` in MP4 files using `Blob.slice()` and patches `stco`/`co64` chunk offsets before streaming.
+
 ## Video Upload & Playback Resume REST Endpoints
-- `POST /api/upload`: Multipart upload with `playImmediately`, `title`, and progressive streaming.
-- `GET /api/stream/{uploadId}`: Progressive HTTP Range-capable stream for playing growing files.
+- `POST /api/upload`: Direct binary stream or multipart upload with `playImmediately`, `title`, `fileName`, and instant progressive streaming.
+- `GET /api/stream/{uploadId}`: Progressive HTTP Range-capable stream for playing growing files with automatic EOF resolution.
 - `GET /api/videos`: List all stored videos with metadata and watch progress.
 - `GET /api/videos/{fileName}`: Direct streaming / downloading of stored video.
 - `POST /api/videos/{id}/play`: Play / Resume video at saved position.

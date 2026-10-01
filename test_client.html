@@ -108,9 +108,9 @@
                 <h3>2. Upload & Play Video from Device</h3>
                 
                 <div class="upload-box" id="dropZone">
-                    <p style="margin-bottom: 10px; font-weight: 600;">Choose a video file from your computer or phone</p>
-                    <input type="file" id="videoFileInput" accept="video/*" style="display: none;" onchange="handleFileSelect(event)" />
-                    <button class="cyan small" onclick="document.getElementById('videoFileInput').click()">📁 Select Video File</button>
+                    <p style="margin-bottom: 10px; font-weight: 600;">Choose any media file (MP4, MKV, WebM, AVI, TS, MOV, FLV, WMV, 3GP, MP3, etc.)</p>
+                    <input type="file" id="videoFileInput" accept="video/*,audio/*,.mkv,.mp4,.webm,.avi,.mov,.flv,.wmv,.ts,.m2ts,.m4v,.3gp,.ogg,.ogv,.vob,.mp3,.aac,.wav,.flac,.m4a,.opus,.m3u8,.mpd" style="display: none;" onchange="handleFileSelect(event)" />
+                    <button class="cyan small" onclick="document.getElementById('videoFileInput').click()">📁 Select Media File</button>
                     
                     <div id="selectedFileInfo" class="file-info" style="display: none;">
                         <div>
@@ -122,7 +122,7 @@
                 </div>
 
                 <div style="margin-bottom: 12px;">
-                    <label for="videoTitleInput">Video Title (displayed on TV)</label>
+                    <label for="videoTitleInput">Media Title (displayed on TV)</label>
                     <input type="text" id="videoTitleInput" placeholder="Title for TV (e.g. Summer Vacation)" />
                 </div>
 
@@ -149,11 +149,11 @@
 
             <!-- Direct URL Streaming Card -->
             <div class="card">
-                <h3>3. Direct Video Stream URL</h3>
+                <h3>3. Direct Media Stream URL</h3>
                 <div>
-                    <label for="mediaUrl">Web Stream URL (MP4 / HLS)</label>
+                    <label for="mediaUrl">Web Stream URL (MP4, MKV, WebM, HLS .m3u8, DASH .mpd, RTSP)</label>
                     <div style="display: flex; gap: 8px;">
-                        <input type="text" id="mediaUrl" placeholder="Direct MP4 / HLS URL" value="https://storage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4" style="flex: 1;" />
+                        <input type="text" id="mediaUrl" placeholder="Direct Media URL (MP4, MKV, WebM, HLS, DASH, RTSP)" value="https://storage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4" style="flex: 1;" />
                         <button class="primary" onclick="sendLoadMedia()">Stream</button>
                     </div>
                 </div>
@@ -385,6 +385,49 @@
             log(`--&gt; Sent LOAD_MEDIA: ${url}`, "#e040fb");
         }
 
+        function getFormatInfo(filename) {
+            const ext = (filename || '').split('.').pop().toLowerCase();
+            switch (ext) {
+                case 'mp4':
+                case 'm4v':
+                case 'mov':
+                    return { name: ext.toUpperCase(), isMp4: true };
+                case 'mkv':
+                    return { name: 'Matroska (MKV)', isMp4: false };
+                case 'webm':
+                    return { name: 'WebM', isMp4: false };
+                case 'ts':
+                case 'm2ts':
+                case 'mts':
+                    return { name: 'MPEG-TS', isMp4: false };
+                case 'avi':
+                    return { name: 'AVI', isMp4: false };
+                case 'flv':
+                    return { name: 'FLV', isMp4: false };
+                case 'wmv':
+                    return { name: 'WMV', isMp4: false };
+                case '3gp':
+                case '3g2':
+                    return { name: '3GPP', isMp4: true };
+                case 'ogv':
+                case 'ogg':
+                    return { name: 'Ogg', isMp4: false };
+                case 'mpg':
+                case 'mpeg':
+                case 'vob':
+                    return { name: 'MPEG', isMp4: false };
+                case 'mp3':
+                case 'aac':
+                case 'wav':
+                case 'flac':
+                case 'm4a':
+                case 'opus':
+                    return { name: 'Audio (' + ext.toUpperCase() + ')', isMp4: false };
+                default:
+                    return { name: ext.toUpperCase() || 'Media', isMp4: false };
+            }
+        }
+
         // ==========================================
         // 2. Video File Selection & Fast-Start Check
         // ==========================================
@@ -395,7 +438,7 @@
 
             document.getElementById('selectedFileInfo').style.display = 'flex';
             document.getElementById('selectedFileName').textContent = file.name;
-            document.getElementById('selectedFileSize').textContent = `${formatBytes(file.size)} • ${file.type || 'video'}`;
+            document.getElementById('selectedFileSize').textContent = `${formatBytes(file.size)} • ${file.type || 'media'}`;
             
             // Pre-fill title without extension
             const defaultTitle = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
@@ -408,13 +451,19 @@
             badge.textContent = "Analyzing...";
             badge.className = "badge badge-blue";
 
-            const isFast = await checkIsFastStart(file);
-            if (isFast) {
-                badge.textContent = "⚡ Fast-Start Ready";
-                badge.className = "badge badge-green";
+            const fmt = getFormatInfo(file.name);
+            if (fmt.isMp4) {
+                const isFast = await checkIsFastStart(file);
+                if (isFast) {
+                    badge.textContent = `⚡ Fast-Start Ready (${fmt.name})`;
+                    badge.className = "badge badge-green";
+                } else {
+                    badge.textContent = `⚡ Auto Fast-Start (${fmt.name})`;
+                    badge.className = "badge badge-green";
+                }
             } else {
-                badge.textContent = "Standard File";
-                badge.className = "badge badge-yellow";
+                badge.textContent = `⚡ Stream Ready (${fmt.name})`;
+                badge.className = "badge badge-green";
             }
         }
 
@@ -441,10 +490,129 @@
             return true;
         }
 
+        function patchMoovOffsets(buffer, shift) {
+            const view = new DataView(buffer);
+            const containers = new Set(['moov', 'trak', 'edts', 'mdia', 'minf', 'dinf', 'stbl']);
+
+            function walk(start, end) {
+                let pos = start;
+                while (pos + 8 <= end) {
+                    let bsize = view.getUint32(pos);
+                    const btype = String.fromCharCode(
+                        view.getUint8(pos + 4), view.getUint8(pos + 5),
+                        view.getUint8(pos + 6), view.getUint8(pos + 7)
+                    );
+                    let hdr = 8;
+                    if (bsize === 1) {
+                        const high = view.getUint32(pos + 8);
+                        const low = view.getUint32(pos + 12);
+                        bsize = high * 4294967296 + low;
+                        hdr = 16;
+                    }
+                    if (bsize <= 0 || pos + bsize > end) {
+                        bsize = end - pos;
+                    }
+
+                    if (containers.has(btype)) {
+                        walk(pos + hdr, pos + bsize);
+                    } else if (btype === 'stco') {
+                        const count = view.getUint32(pos + 12);
+                        let p = pos + 16;
+                        for (let i = 0; i < count; i++) {
+                            const val = view.getUint32(p);
+                            view.setUint32(p, val + shift);
+                            p += 4;
+                        }
+                    } else if (btype === 'co64') {
+                        const count = view.getUint32(pos + 12);
+                        let p = pos + 16;
+                        const shiftBig = BigInt(shift);
+                        for (let i = 0; i < count; i++) {
+                            const val = view.getBigUint64(p);
+                            view.setBigUint64(p, val + shiftBig);
+                            p += 8;
+                        }
+                    }
+                    pos += bsize;
+                }
+            }
+
+            walk(0, buffer.byteLength);
+        }
+
+        async function ensureFastStart(file) {
+            try {
+                const name = (file.name || '').toLowerCase();
+                const isMp4 = name.endsWith('.mp4') || name.endsWith('.m4v') || name.endsWith('.mov') || (file.type && file.type.includes('mp4'));
+                if (!isMp4) return file;
+
+                let offset = 0;
+                let mdatOffset = -1;
+                let moovOffset = -1;
+                let moovSize = 0;
+
+                while (offset < file.size) {
+                    const slice = file.slice(offset, Math.min(offset + 16, file.size));
+                    const buf = await slice.arrayBuffer();
+                    if (buf.byteLength < 8) break;
+                    const view = new DataView(buf);
+                    let size = view.getUint32(0);
+                    const type = String.fromCharCode(
+                        view.getUint8(4), view.getUint8(5), view.getUint8(6), view.getUint8(7)
+                    );
+                    if (size === 1) {
+                        if (buf.byteLength < 16) break;
+                        const high = view.getUint32(8);
+                        const low = view.getUint32(12);
+                        size = high * 4294967296 + low;
+                    } else if (size === 0) {
+                        size = file.size - offset;
+                    }
+
+                    if (type === 'moov') {
+                        moovOffset = offset;
+                        moovSize = size;
+                        break;
+                    } else if (type === 'mdat') {
+                        mdatOffset = offset;
+                    }
+                    if (size <= 0) break;
+                    offset += size;
+                }
+
+                if (moovOffset === -1 || mdatOffset === -1 || moovOffset < mdatOffset) {
+                    // Already faststart or moov not after mdat
+                    return file;
+                }
+
+                log(`⚙️ Relocating MP4 metadata to front for instant streaming...`, "#00e5ff");
+                const moovSlice = file.slice(moovOffset, moovOffset + moovSize);
+                const moovBuf = await moovSlice.arrayBuffer();
+                patchMoovOffsets(moovBuf, moovSize);
+
+                const parts = [];
+                if (mdatOffset > 0) {
+                    parts.push(file.slice(0, mdatOffset));
+                }
+                parts.push(moovBuf);
+                parts.push(file.slice(mdatOffset, moovOffset));
+                if (moovOffset + moovSize < file.size) {
+                    parts.push(file.slice(moovOffset + moovSize));
+                }
+
+                const fastStartBlob = new Blob(parts, { type: file.type || 'video/mp4' });
+                log(`⚡ <b>Fast-Start Ready:</b> Video will stream on TV immediately!`, "#00e676");
+                return fastStartBlob;
+            } catch (err) {
+                console.warn("Fast-start conversion skipped:", err);
+                return file;
+            }
+        }
+
         // ==========================================
         // 3. Progressive Video Upload & Stream
         // ==========================================
-        function uploadAndPlay(playImmediately) {
+        async function uploadAndPlay(playImmediately) {
             if (!selectedFile) return alert("Please select a video file first.");
 
             const { httpBase } = getTargetEndpoint();
@@ -461,14 +629,14 @@
             progressSection.style.display = 'block';
             progressBar.style.width = '0%';
             percentText.textContent = '0%';
-            statusText.textContent = playImmediately ? "Streaming to TV..." : "Uploading to TV...";
+            statusText.textContent = playImmediately ? "Optimizing & streaming to TV..." : "Uploading to TV...";
 
-            const url = `${httpBase}/api/upload?playImmediately=${playImmediately}&title=${encodeURIComponent(title)}&totalSize=${selectedFile.size}`;
+            let uploadPayload = selectedFile;
+            if (playImmediately) {
+                uploadPayload = await ensureFastStart(selectedFile);
+            }
 
-            const formData = new FormData();
-            formData.append('title', title);
-            formData.append('playImmediately', playImmediately ? 'true' : 'false');
-            formData.append('file', selectedFile, selectedFile.name);
+            const url = `${httpBase}/api/upload?playImmediately=${playImmediately}&title=${encodeURIComponent(title)}&totalSize=${uploadPayload.size}&fileName=${encodeURIComponent(selectedFile.name)}`;
 
             uploadXhr = new XMLHttpRequest();
             let startTime = Date.now();
@@ -487,10 +655,11 @@
                         speedText.textContent = `${formatBytes(speed)}/s`;
                     }
 
-                    if (playImmediately && !hasTriggeredPlayState && e.loaded >= 3 * 1024 * 1024) {
+                    const triggerBytes = Math.min(65536, uploadPayload.size);
+                    if (playImmediately && !hasTriggeredPlayState && e.loaded >= triggerBytes) {
                         hasTriggeredPlayState = true;
-                        statusText.textContent = "🟢 Playing on TV! (Uploading remainder in background)";
-                        log(`⚡ <b>Progressive Streaming Started!</b> TV began playback while upload continues in background.`, "#00e676");
+                        statusText.textContent = "🟢 Playing on TV! (Streaming remainder in background)";
+                        log(`⚡ <b>Progressive Streaming Started!</b> TV began playback immediately.`, "#00e676");
                     }
                 }
             };
@@ -515,9 +684,11 @@
 
             uploadXhr.open('POST', url, true);
             if (token) uploadXhr.setRequestHeader('X-Auth-Token', token);
-            uploadXhr.setRequestHeader('X-File-Size', selectedFile.size.toString());
-            uploadXhr.send(formData);
-            log(`🚀 Starting upload of <b>${selectedFile.name}</b> (${formatBytes(selectedFile.size)})...`, "#00e5ff");
+            uploadXhr.setRequestHeader('X-File-Size', uploadPayload.size.toString());
+            uploadXhr.setRequestHeader('X-File-Name', encodeURIComponent(selectedFile.name));
+            uploadXhr.setRequestHeader('Content-Type', uploadPayload.type || 'application/octet-stream');
+            uploadXhr.send(uploadPayload);
+            log(`🚀 Starting direct stream upload of <b>${selectedFile.name}</b> (${formatBytes(uploadPayload.size)})...`, "#00e5ff");
         }
 
         // ==========================================

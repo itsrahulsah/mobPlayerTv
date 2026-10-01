@@ -114,6 +114,7 @@ class VideoUploadManager(
         val upload = activeUploads[uploadId] ?: throw IllegalArgumentException("Upload $uploadId not found")
         val stream = upload.outputStream ?: throw IllegalStateException("Upload $uploadId stream is closed")
         stream.write(data, 0, length)
+        stream.flush()
         upload.bytesWritten += length
     }
 

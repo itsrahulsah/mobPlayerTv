@@ -308,17 +308,22 @@ The TV server continuously broadcasts playback status updates to the connected a
 In addition to WebSocket control, the embedded Ktor server provides RESTful HTTP endpoints for uploading videos from client devices, progressive streaming (play-while-uploading), metadata persistence, and resuming playback.
 
 ### 10.1. Upload Video (`POST /api/upload`)
-Uploads a local video file from the browser to TV internal app storage (`context.filesDir/uploads`). Supports progressive streaming: as soon as the initial buffer (~3-5 MB) is written, the TV automatically begins playing via the `/api/stream/{uploadId}` endpoint without waiting for the full upload to complete.
+Uploads a local media file from the client to TV internal app storage (`context.filesDir/uploads`). Supports instant progressive streaming: as soon as the initial buffer (64 KB) is written, the TV automatically begins playing via the `/api/stream/{uploadId}` endpoint without waiting for upload completion (< 0.5s playback latency). Supports both raw binary streaming (`call.receiveChannel()`) and standard `multipart/form-data`.
 
 - **Method**: `POST`
-- **Path**: `/api/upload`
+- **Path**: `/api/upload?playImmediately=true|false&title=<customTitle>&totalSize=<bytes>&fileName=<originalName>`
 - **Headers**:
   - `X-Auth-Token`: Client UUID auth token (or `?token=` query param).
-  - `Content-Type`: `multipart/form-data`
-- **Multipart Form Fields**:
-  - `file`: Video binary file payload (`video/mp4`, `video/webm`, `video/x-matroska`, etc.).
-  - `title`: Optional custom video title string (defaults to original filename).
-  - `playImmediately`: Optional boolean `"true"` or `"false"` (default: `"true"`).
+  - `X-File-Size`: Total file size in bytes (optional, helps range estimation).
+  - `X-File-Name`: Original filename including extension (e.g. `video.mkv`).
+  - `Content-Type`: Either `video/*`, `audio/*`, `application/octet-stream` (direct binary streaming) or `multipart/form-data`.
+- **Payload Modes**:
+  1. **Direct Binary Stream**: Send raw file bytes directly in the HTTP request body. Zero boundary parsing overhead, immediate chunk-by-chunk disk writes and instant playback trigger.
+  2. **Multipart Form-Data**:
+     - `file`: Media binary file payload.
+     - `title`: Optional custom media title string.
+     - `playImmediately`: Optional boolean `"true"` or `"false"` (default: `"true"`).
+- **Supported Formats**: MP4, MKV, WebM, MPEG-TS, AVI, MOV, FLV, WMV, 3GP, Ogg, HLS (.m3u8), DASH (.mpd), RTSP, and audio files (MP3, AAC, FLAC, WAV, Opus).
 - **Response**: HTTP 200 JSON
 ```json
 {

@@ -47,7 +47,7 @@ class TvMainViewModel @Inject constructor(
             0L
         }
         serverRepository.openPlayer(metadata.title)
-        mediaRepository.loadMedia("file://${file.absolutePath}", startPos, metadata.id)
+        mediaRepository.loadMedia("file://${file.absolutePath}", startPos, metadata.id, metadata.mimeType)
         val resumeText = if (startPos > 0) " (Resumed)" else ""
         serverRepository.postRemoteAction(
             RemoteActionEvent("PLAY", "🎬 Playing$resumeText", metadata.title, RemoteIconType.PLAY)

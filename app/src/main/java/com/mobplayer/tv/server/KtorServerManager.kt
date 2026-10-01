@@ -25,6 +25,8 @@ import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.ApplicationEngine
 import io.ktor.server.engine.embeddedServer
+import io.ktor.server.request.contentType
+import io.ktor.server.request.receiveChannel
 import io.ktor.server.request.receiveMultipart
 import io.ktor.server.response.header
 import io.ktor.server.response.respond
@@ -104,11 +106,11 @@ class KtorServerManager @Inject constructor(
                 options("/api/{...}") {
                     call.response.header(HttpHeaders.AccessControlAllowOrigin, "*")
                     call.response.header(HttpHeaders.AccessControlAllowMethods, "GET, POST, DELETE, OPTIONS")
-                    call.response.header(HttpHeaders.AccessControlAllowHeaders, "Content-Type, X-Auth-Token, X-Auth-PIN, Authorization, Range, X-File-Size")
+                    call.response.header(HttpHeaders.AccessControlAllowHeaders, "Content-Type, X-Auth-Token, X-Auth-PIN, Authorization, Range, X-File-Size, X-File-Name")
                     call.respond(HttpStatusCode.OK)
                 }
 
-                // 1. Upload video with optional progressive play-while-uploading
+                // 1. Upload video with progressive play-while-uploading
                 post("/api/upload") {
                     call.response.header(HttpHeaders.AccessControlAllowOrigin, "*")
                     val token = call.request.headers["X-Auth-Token"] ?: call.request.queryParameters["token"]
@@ -126,60 +128,109 @@ class KtorServerManager @Inject constructor(
                     var activeUpload: VideoUploadManager.ActiveUpload? = null
                     var initialPlaybackTriggered = false
 
-                    try {
-                        val multipart = call.receiveMultipart()
-                        multipart.forEachPart { part ->
-                            when (part) {
-                                is PartData.FormItem -> {
-                                    if (part.name == "title") customTitle = part.value
-                                    if (part.name == "play" || part.name == "playImmediately") {
-                                        playImmediately = part.value.toBooleanStrictOrNull() ?: playImmediately
-                                    }
-                                }
-                                is PartData.FileItem -> {
-                                    val originalName = part.originalFileName ?: "uploaded_video.mp4"
-                                    val upload = videoUploadManager.createActiveUpload(
-                                        originalFileName = originalName,
-                                        customTitle = customTitle,
-                                        totalSize = totalSizeHeader
-                                    )
-                                    activeUpload = upload
-                                    val channel = part.provider()
-                                    val buffer = ByteArray(65536)
-                                    while (true) {
-                                        val read = channel.readAvailable(buffer, 0, buffer.size)
-                                        if (read <= 0) break
-                                        videoUploadManager.writeChunk(upload.uploadId, buffer, read)
+                    suspend fun processChunk(upload: VideoUploadManager.ActiveUpload, buffer: ByteArray, read: Int) {
+                        videoUploadManager.writeChunk(upload.uploadId, buffer, read)
 
-                                        // Start playback once 3MB buffer is written if playImmediately is true
-                                        if (playImmediately && !initialPlaybackTriggered && upload.bytesWritten >= 3 * 1024 * 1024) {
-                                            initialPlaybackTriggered = true
-                                            val streamUrl = "http://127.0.0.1:$port/api/stream/${upload.uploadId}"
-                                            withContext(Dispatchers.Main.immediate) {
-                                                serverRepository.openPlayer(upload.metadata.title)
-                                                mediaRepository.loadMedia(streamUrl, 0L, upload.metadata.id)
-                                                serverRepository.postRemoteAction(
-                                                    RemoteActionEvent("LOAD_MEDIA", "🎬 Streaming", upload.metadata.title, RemoteIconType.MEDIA)
-                                                )
-                                            }
+                        // Start playback as soon as initial buffer (64KB or half file) is written
+                        val startThreshold = if (upload.totalSize in 1..131072L) {
+                            minOf(16384L, upload.totalSize / 2)
+                        } else {
+                            65536L // 64 KB! Start right after reading container header/index!
+                        }
+                        if (playImmediately && !initialPlaybackTriggered && (upload.bytesWritten >= startThreshold || upload.bytesWritten >= 65536L)) {
+                            initialPlaybackTriggered = true
+                            Log.d("RemoteEvent", "⚡ Triggering progressive stream playback at ${upload.bytesWritten} bytes")
+                            val streamUrl = "http://127.0.0.1:$port/api/stream/${upload.uploadId}"
+                            withContext(Dispatchers.Main.immediate) {
+                                serverRepository.openPlayer(upload.metadata.title)
+                                mediaRepository.loadMedia(streamUrl, 0L, upload.metadata.id, upload.metadata.mimeType)
+                                serverRepository.postRemoteAction(
+                                    RemoteActionEvent("LOAD_MEDIA", "🎬 Streaming", upload.metadata.title, RemoteIconType.MEDIA)
+                                )
+                            }
+                        }
+                    }
+
+                    try {
+                        val isMultipart = try {
+                            call.request.contentType().match(ContentType.MultiPart.FormData)
+                        } catch (_: Exception) {
+                            false
+                        }
+
+                        if (isMultipart) {
+                            val multipart = call.receiveMultipart()
+                            multipart.forEachPart { part ->
+                                when (part) {
+                                    is PartData.FormItem -> {
+                                        if (part.name == "title") customTitle = part.value
+                                        if (part.name == "play" || part.name == "playImmediately") {
+                                            playImmediately = part.value.toBooleanStrictOrNull() ?: playImmediately
                                         }
                                     }
+                                    is PartData.FileItem -> {
+                                        val originalName = part.originalFileName ?: "uploaded_media"
+                                        val detectedMime = VideoMetadata.resolveMimeType(originalName, part.contentType?.toString())
+                                        val upload = videoUploadManager.createActiveUpload(
+                                            originalFileName = originalName,
+                                            customTitle = customTitle,
+                                            totalSize = totalSizeHeader,
+                                            mimeType = detectedMime
+                                        )
+                                        activeUpload = upload
+                                        val channel = part.provider()
+                                        val buffer = ByteArray(65536)
+                                        while (true) {
+                                            val read = channel.readAvailable(buffer, 0, buffer.size)
+                                            if (read <= 0) break
+                                            processChunk(upload, buffer, read)
+                                        }
+                                    }
+                                    else -> Unit
                                 }
-                                else -> Unit
+                                part.dispose()
                             }
-                            part.dispose()
+                        } else {
+                            // Direct raw stream upload
+                            val rawFileName = call.request.queryParameters["fileName"]
+                                ?: call.request.queryParameters["filename"]
+                                ?: call.request.headers["X-File-Name"]
+                                ?: "uploaded_media.mp4"
+                            val reqContentType = call.request.headers[HttpHeaders.ContentType]
+                            val detectedMime = VideoMetadata.resolveMimeType(rawFileName, reqContentType)
+                            val upload = videoUploadManager.createActiveUpload(
+                                originalFileName = rawFileName,
+                                customTitle = customTitle,
+                                totalSize = totalSizeHeader,
+                                mimeType = detectedMime
+                            )
+                            activeUpload = upload
+                            val channel = call.receiveChannel()
+                            val buffer = ByteArray(65536)
+                            while (true) {
+                                val read = channel.readAvailable(buffer, 0, buffer.size)
+                                if (read <= 0) break
+                                processChunk(upload, buffer, read)
+                            }
                         }
 
                         val finalUpload = activeUpload
                         if (finalUpload != null) {
                             val finalMeta = videoUploadManager.markUploadCompleted(finalUpload.uploadId)
+                            Log.d("RemoteEvent", "✅ Upload completed. initialPlaybackTriggered=$initialPlaybackTriggered, size=${finalMeta.fileSize}")
 
-                            if (playImmediately && !initialPlaybackTriggered) {
-                                withContext(Dispatchers.Main.immediate) {
+                            withContext(Dispatchers.Main.immediate) {
+                                if (playImmediately && !initialPlaybackTriggered) {
+                                    initialPlaybackTriggered = true
                                     serverRepository.openPlayer(finalMeta.title)
-                                    mediaRepository.loadMedia("file://${finalUpload.file.absolutePath}", 0L, finalMeta.id)
+                                    mediaRepository.loadMedia("file://${finalUpload.file.absolutePath}", 0L, finalMeta.id, finalMeta.mimeType)
                                     serverRepository.postRemoteAction(
                                         RemoteActionEvent("LOAD_MEDIA", "🎬 Playing", finalMeta.title, RemoteIconType.MEDIA)
+                                    )
+                                } else {
+                                    // The video is ALREADY streaming/playing! Do NOT interrupt ExoPlayer.
+                                    serverRepository.postRemoteAction(
+                                        RemoteActionEvent("UPLOAD_COMPLETE", "✅ Video Saved", finalMeta.title, RemoteIconType.MEDIA)
                                     )
                                 }
                             }
@@ -213,24 +264,30 @@ class KtorServerManager @Inject constructor(
                         ?: return@get call.respond(HttpStatusCode.NotFound, "Active upload stream not found")
 
                     val rangeHeader = call.request.headers[HttpHeaders.Range]
-                    val totalLength = if (upload.totalSize > 0) upload.totalSize else upload.bytesWritten
+                    val totalLength = if (upload.totalSize > 0) {
+                        upload.totalSize
+                    } else if (upload.isCompleted) {
+                        upload.file.length()
+                    } else {
+                        -1L
+                    }
 
                     val (start, end) = if (rangeHeader != null && rangeHeader.startsWith("bytes=")) {
                         val rangeSpec = rangeHeader.removePrefix("bytes=").trim()
                         val parts = rangeSpec.split("-")
                         val rStart = parts[0].toLongOrNull() ?: 0L
                         val rEnd = if (parts.size > 1 && parts[1].isNotEmpty()) {
-                            parts[1].toLongOrNull() ?: (totalLength - 1).coerceAtLeast(0L)
+                            parts[1].toLongOrNull() ?: if (totalLength > 0) (totalLength - 1).coerceAtLeast(0L) else Long.MAX_VALUE - 1
                         } else {
-                            (totalLength - 1).coerceAtLeast(0L)
+                            if (totalLength > 0) (totalLength - 1).coerceAtLeast(0L) else Long.MAX_VALUE - 1
                         }
                         Pair(rStart, rEnd)
                     } else {
-                        Pair(0L, (totalLength - 1).coerceAtLeast(0L))
+                        Pair(0L, if (totalLength > 0) (totalLength - 1).coerceAtLeast(0L) else Long.MAX_VALUE - 1)
                     }
 
-                    val statusCode = if (rangeHeader != null) HttpStatusCode.PartialContent else HttpStatusCode.OK
-                    val contentLength = (end - start + 1).coerceAtLeast(0L)
+                    val statusCode = if (rangeHeader != null && totalLength > 0) HttpStatusCode.PartialContent else HttpStatusCode.OK
+                    val contentLength = if (totalLength > 0) (end - start + 1).coerceAtLeast(0L) else null
 
                     call.response.header(HttpHeaders.AcceptRanges, "bytes")
                     if (rangeHeader != null && totalLength > 0) {
@@ -240,7 +297,7 @@ class KtorServerManager @Inject constructor(
                     call.respondOutputStream(
                         contentType = ContentType.parse(upload.metadata.mimeType),
                         status = statusCode,
-                        contentLength = if (contentLength > 0) contentLength else null
+                        contentLength = contentLength
                     ) {
                         withContext(Dispatchers.IO) {
                             val randomAccessFile = RandomAccessFile(upload.file, "r")
@@ -317,7 +374,7 @@ class KtorServerManager @Inject constructor(
 
                     withContext(Dispatchers.Main.immediate) {
                         serverRepository.openPlayer(meta.title)
-                        mediaRepository.loadMedia("file://${file.absolutePath}", startPos, meta.id)
+                        mediaRepository.loadMedia("file://${file.absolutePath}", startPos, meta.id, meta.mimeType)
                         val resumeText = if (startPos > 0) " (Resumed)" else ""
                         serverRepository.postRemoteAction(
                             RemoteActionEvent("PLAY", "🎬 Playing$resumeText", meta.title, RemoteIconType.PLAY)

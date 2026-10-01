@@ -35,7 +35,18 @@ class MediaRepository @Inject constructor(
     fun initialize(): ExoPlayer {
         player?.let { return it }
 
+        val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                /* minBufferMs = */ 1000,
+                /* maxBufferMs = */ 30000,
+                /* bufferForPlaybackMs = */ 250,
+                /* bufferForPlaybackAfterRebufferMs = */ 500
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
+
         val exoPlayer = ExoPlayer.Builder(context)
+            .setLoadControl(loadControl)
             .build()
         player = exoPlayer
         
@@ -43,6 +54,7 @@ class MediaRepository @Inject constructor(
 
         exoPlayer.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
+                android.util.Log.d("MediaRepository", "▶ onIsPlayingChanged: isPlaying=$isPlaying")
                 updateState()
                 if (isPlaying) {
                     startProgressPolling()
@@ -52,6 +64,14 @@ class MediaRepository @Inject constructor(
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
+                val stateName = when (playbackState) {
+                    Player.STATE_IDLE -> "IDLE"
+                    Player.STATE_BUFFERING -> "BUFFERING"
+                    Player.STATE_READY -> "READY"
+                    Player.STATE_ENDED -> "ENDED"
+                    else -> "UNKNOWN($playbackState)"
+                }
+                android.util.Log.d("MediaRepository", "🔄 onPlaybackStateChanged: state=$stateName, playWhenReady=${player?.playWhenReady}")
                 updateState()
             }
 
@@ -133,9 +153,23 @@ class MediaRepository @Inject constructor(
         updateState()
     }
 
-    fun loadMedia(url: String, startPositionMs: Long = 0L, videoId: String? = null) {
+    fun loadMedia(
+        url: String,
+        startPositionMs: Long = 0L,
+        videoId: String? = null,
+        mimeType: String? = null
+    ) {
         activePlayingVideoId = videoId
-        val mediaItem = MediaItem.fromUri(url)
+        val builder = MediaItem.Builder().setUri(url)
+        val resolvedMime = if (!mimeType.isNullOrBlank()) {
+            mimeType
+        } else {
+            com.mobplayer.tv.models.VideoMetadata.resolveMimeType(url)
+        }
+        if (resolvedMime.isNotBlank()) {
+            builder.setMimeType(resolvedMime)
+        }
+        val mediaItem = builder.build()
         player?.setMediaItem(mediaItem)
         player?.prepare()
         if (startPositionMs > 0L) {

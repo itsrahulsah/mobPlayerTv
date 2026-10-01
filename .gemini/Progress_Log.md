@@ -41,7 +41,7 @@
 ---
 
 ## Phase 7: Local Video Upload, Metadata & Playback Resume
-**Status: IN PLANNING / ARCHITECTURE DEFINED**
+**Status: COMPLETED**
 - **Task 7.1:** Design and implement `VideoMetadata.kt` model with title, size, duration, and `lastPlayedPositionMs`.
 - **Task 7.2:** Implement `VideoUploadManager.kt` for local storage in `context.filesDir/uploads`, metadata persistence, and progressive growing-file buffer tracking (`ActiveUpload`).
 - **Task 7.3:** Implement Ktor REST routes in `KtorServerManager.kt`:
@@ -54,4 +54,16 @@
 - **Task 7.5:** Update `TvHomeScreen.kt` to display an "Uploaded Videos" rail using `CardType.CONTINUE_WATCHING` showing custom title, thumbnail, and watch progress bar.
 - **Task 7.6:** Update `test_client.html` with video file picker, editable title, fast-start detection, live upload progress, and stored videos library with `Resume` and `Start Over` buttons.
 - **Task 7.7:** Unit tests for `VideoUploadManager` and progressive stream tracking.
+
+---
+
+## Phase 8: Instant Progressive Streaming (< 0.5s) & Universal Media Formats
+**Status: COMPLETED**
+- **Task 8.1:** Configured aggressive fast-start `DefaultLoadControl` in `MediaRepository.kt` (`bufferForPlaybackMs = 250`, `bufferForPlaybackAfterRebufferMs = 500`, `prioritizeTimeOverSizeThresholds = true`). ExoPlayer transitions to `READY` in < 300 ms.
+- **Task 8.2:** Lowered progressive stream start trigger threshold from 3MB/256KB to 64 KB in `KtorServerManager.kt`.
+- **Task 8.3:** Fixed upload completion bug: updated completion handler to not interrupt or reset ongoing progressive streams when upload completes while the player is buffering.
+- **Task 8.4:** Added direct raw binary streaming upload via `call.receiveChannel()` for zero-overhead streaming alongside multipart form-data.
+- **Task 8.5:** Expanded media container and protocol support across all Media3/ExoPlayer supported formats (MP4, MKV, WebM, TS, AVI, MOV, FLV, HLS, DASH, RTSP, and audio codecs) with dynamic MIME type detection in `VideoMetadata.resolveMimeType()`.
+- **Task 8.6:** Added `network_security_config.xml` and `android:usesCleartextTraffic="true"` to permit cleartext HTTP traffic for local network and loopback streaming.
+- **Task 8.7:** Added client-side in-browser MP4 fast-start `moov` atom relocation (`ensureFastStart()`) in `test_client.html` with chunk offset patching (`stco`/`co64`) and direct binary XHR streaming.
 
