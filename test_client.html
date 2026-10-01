@@ -24,7 +24,7 @@
         * { box-sizing: border-box; margin: 0; padding: 0; }
         
         body { 
-            font-family: 'Inter', -apple-system, sans-serif; 
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
             background: var(--bg-color); 
             color: var(--text-main); 
             line-height: 1.5;
@@ -407,7 +407,7 @@
 
                     <div class="input-row form-group">
                         <button class="primary" onclick="connect()" style="flex: 1;"><i class="fa-solid fa-link"></i> Connect</button>
-                        <button class="danger" onclick="disconnect()"><i class="fa-solid fa-unlink"></i></button>
+                        <button class="danger" onclick="disconnect()" title="Disconnect" aria-label="Disconnect"><i class="fa-solid fa-unlink"></i></button>
                     </div>
 
                     <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 20px 0;">
@@ -416,7 +416,7 @@
                         <label for="pinInput">Pairing PIN</label>
                         <div class="input-action">
                             <input type="text" id="pinInput" placeholder="Enter 4-digit PIN" maxlength="4" style="text-align: center; letter-spacing: 4px; font-weight: bold;" />
-                            <button class="primary" onclick="sendPinSubmit()"><i class="fa-solid fa-check"></i></button>
+                            <button class="primary" onclick="sendPinSubmit()" title="Submit PIN" aria-label="Submit PIN"><i class="fa-solid fa-check"></i></button>
                         </div>
                     </div>
                     
@@ -429,7 +429,7 @@
                         <label for="mediaUrl">Direct Video Stream URL</label>
                         <div class="input-action">
                             <input type="text" id="mediaUrl" placeholder="MP4 / HLS URL" value="https://storage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4" />
-                            <button class="primary" onclick="sendLoadMedia()"><i class="fa-solid fa-play"></i></button>
+                            <button class="primary" onclick="sendLoadMedia()" title="Load Media" aria-label="Load Media"><i class="fa-solid fa-play"></i></button>
                         </div>
                     </div>
                 </div>
@@ -446,23 +446,23 @@
                     </div>
 
                     <div class="dpad">
-                        <button class="dpad-btn dpad-up" onclick="sendAction('DPAD_UP')"><i class="fa-solid fa-caret-up"></i></button>
-                        <button class="dpad-btn dpad-left" onclick="sendAction('DPAD_LEFT')"><i class="fa-solid fa-caret-left"></i></button>
-                        <button class="dpad-center" onclick="sendAction('DPAD_CENTER')">OK</button>
-                        <button class="dpad-btn dpad-right" onclick="sendAction('DPAD_RIGHT')"><i class="fa-solid fa-caret-right"></i></button>
-                        <button class="dpad-btn dpad-down" onclick="sendAction('DPAD_DOWN')"><i class="fa-solid fa-caret-down"></i></button>
+                        <button class="dpad-btn dpad-up" onclick="sendAction('DPAD_UP')" title="Up" aria-label="Up"><i class="fa-solid fa-caret-up"></i></button>
+                        <button class="dpad-btn dpad-left" onclick="sendAction('DPAD_LEFT')" title="Left" aria-label="Left"><i class="fa-solid fa-caret-left"></i></button>
+                        <button class="dpad-center" onclick="sendAction('DPAD_CENTER')" title="OK / Select" aria-label="OK">OK</button>
+                        <button class="dpad-btn dpad-right" onclick="sendAction('DPAD_RIGHT')" title="Right" aria-label="Right"><i class="fa-solid fa-caret-right"></i></button>
+                        <button class="dpad-btn dpad-down" onclick="sendAction('DPAD_DOWN')" title="Down" aria-label="Down"><i class="fa-solid fa-caret-down"></i></button>
                     </div>
 
                     <div class="media-controls">
-                        <button class="media-btn" onclick="sendAction('SEEK_BACKWARD')"><i class="fa-solid fa-backward-step"></i></button>
-                        <button class="media-btn play" onclick="sendAction('PLAY')"><i class="fa-solid fa-play"></i></button>
-                        <button class="media-btn" onclick="sendAction('PAUSE')"><i class="fa-solid fa-pause"></i></button>
-                        <button class="media-btn" onclick="sendAction('SEEK_FORWARD')"><i class="fa-solid fa-forward-step"></i></button>
+                        <button class="media-btn" onclick="sendAction('SEEK_BACKWARD')" title="Seek Backward 10s" aria-label="Seek Backward"><i class="fa-solid fa-backward-step"></i></button>
+                        <button class="media-btn play" onclick="sendAction('PLAY')" title="Play" aria-label="Play"><i class="fa-solid fa-play"></i></button>
+                        <button class="media-btn" onclick="sendAction('PAUSE')" title="Pause" aria-label="Pause"><i class="fa-solid fa-pause"></i></button>
+                        <button class="media-btn" onclick="sendAction('SEEK_FORWARD')" title="Seek Forward 10s" aria-label="Seek Forward"><i class="fa-solid fa-forward-step"></i></button>
                     </div>
 
                     <div class="action-row" style="margin-top: 8px;">
                         <button class="action-btn" onclick="sendAction('VOLUME_DOWN')"><i class="fa-solid fa-volume-low"></i> Vol -</button>
-                        <button class="action-btn" onclick="sendAction('MUTE')"><i class="fa-solid fa-volume-xmark"></i></button>
+                        <button class="action-btn" onclick="sendAction('MUTE')" title="Mute" aria-label="Mute"><i class="fa-solid fa-volume-xmark"></i></button>
                         <button class="action-btn" onclick="sendAction('VOLUME_UP')"><i class="fa-solid fa-volume-high"></i> Vol +</button>
                     </div>
                 </div>
@@ -472,7 +472,7 @@
         <div class="card" style="margin-top: 20px;">
             <div class="log-header">
                 <div class="card-title" style="margin: 0;"><i class="fa-solid fa-terminal"></i> Terminal Logs</div>
-                <button onclick="clearLog()" style="padding: 6px 12px; font-size: 12px;"><i class="fa-solid fa-trash-can"></i> Clear</button>
+                <button onclick="clearLog()" style="padding: 6px 12px; font-size: 12px;" title="Clear Logs" aria-label="Clear Logs"><i class="fa-solid fa-trash-can"></i> Clear</button>
             </div>
             <div class="log-box" id="logBox"></div>
         </div>
@@ -480,6 +480,8 @@
 
     <script>
         let ws;
+        let isExplicitDisconnect = false;
+        let reconnectTimer = null;
         const logBox = document.getElementById('logBox');
         const statusBadge = document.getElementById('status');
         const isHosted = ['http:', 'https:'].includes(window.location.protocol);
@@ -532,6 +534,7 @@
         }
 
         function connect() {
+            isExplicitDisconnect = false;
             if (ws) {
                 ws.close();
                 ws = null;
@@ -580,7 +583,11 @@
             
             ws.onclose = () => {
                 updateStatus('disconnected');
-                log("Connection closed.", "var(--danger)");
+                if (document.visibilityState === 'hidden') {
+                    log("Session paused (backgrounded).", "var(--text-muted)");
+                } else if (!isExplicitDisconnect) {
+                    log("Connection closed.", "var(--danger)");
+                }
             };
             
             ws.onerror = (error) => {
@@ -589,6 +596,11 @@
         }
 
         function disconnect() {
+            isExplicitDisconnect = true;
+            if (reconnectTimer) {
+                clearTimeout(reconnectTimer);
+                reconnectTimer = null;
+            }
             if (ws) {
                 ws.close();
                 ws = null;
@@ -656,7 +668,40 @@
                 case 'ArrowRight': sendAction('DPAD_RIGHT'); e.preventDefault(); break;
                 case 'Enter': sendAction('DPAD_CENTER'); e.preventDefault(); break;
                 case 'Escape': sendAction('BACK'); e.preventDefault(); break;
-                case ' ': sendAction('PLAY'); e.preventDefault(); break;
+                case ' ': sendAction('PLAY_PAUSE'); e.preventDefault(); break;
+            }
+        });
+
+        // Specific Enter key listeners for form inputs
+        const pinInput = document.getElementById('pinInput');
+        if (pinInput) {
+            pinInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    sendPinSubmit();
+                }
+            });
+        }
+
+        const mediaUrlInput = document.getElementById('mediaUrl');
+        if (mediaUrlInput) {
+            mediaUrlInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    sendLoadMedia();
+                }
+            });
+        }
+
+        ['ipInput', 'portInput'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        connect();
+                    }
+                });
             }
         });
         
@@ -666,9 +711,54 @@
             if (urlParams.has('ip')) {
                 document.getElementById('ipInput').value = urlParams.get('ip');
             }
-            // Add a short delay so UI is fully rendered
-            setTimeout(connect, 300);
+            connect();
         };
+
+        // Auto-disconnect on minimize/background and auto-reconnect + auto-auth on revisit
+        function handleVisibilityHidden() {
+            if (isExplicitDisconnect) return;
+            if (reconnectTimer) {
+                clearTimeout(reconnectTimer);
+                reconnectTimer = null;
+            }
+            if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+                log("Browser minimized/hidden: pausing session.", "var(--text-muted)");
+                ws.close();
+                ws = null;
+                updateStatus('disconnected');
+            }
+        }
+
+        function handleRevisit() {
+            if (isExplicitDisconnect) return;
+            if (document.visibilityState === 'hidden') return;
+            
+            // If already connected or connecting, do not duplicate
+            if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+
+            if (reconnectTimer) clearTimeout(reconnectTimer);
+            reconnectTimer = setTimeout(() => {
+                reconnectTimer = null;
+                if (!isExplicitDisconnect && document.visibilityState !== 'hidden') {
+                    if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+                        log("Browser active: reconnecting to TV...", "var(--primary)");
+                        connect();
+                    }
+                }
+            }, 150);
+        }
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') {
+                handleVisibilityHidden();
+            } else if (document.visibilityState === 'visible') {
+                handleRevisit();
+            }
+        });
+
+        window.addEventListener('pagehide', handleVisibilityHidden);
+        window.addEventListener('pageshow', handleRevisit);
+        window.addEventListener('focus', handleRevisit);
     </script>
 </body>
 </html>
