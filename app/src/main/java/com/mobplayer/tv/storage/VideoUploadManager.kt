@@ -31,7 +31,8 @@ class VideoUploadManager(
         val totalSize: Long,
         @Volatile var bytesWritten: Long = 0L,
         @Volatile var isCompleted: Boolean = false,
-        @Volatile var error: Throwable? = null
+        @Volatile var error: Throwable? = null,
+        @Volatile var lastActivityAt: Long = System.currentTimeMillis()
     ) {
         internal var outputStream: FileOutputStream? = null
     }
@@ -116,6 +117,7 @@ class VideoUploadManager(
         stream.write(data, 0, length)
         stream.flush()
         upload.bytesWritten += length
+        upload.lastActivityAt = System.currentTimeMillis()
     }
 
     fun markUploadCompleted(uploadId: String): VideoMetadata {
@@ -134,6 +136,7 @@ class VideoUploadManager(
 
         saveMetadataToFile(finalMeta)
         refreshVideosFlow()
+        activeUploads.remove(uploadId)
         return finalMeta
     }
 
@@ -149,6 +152,42 @@ class VideoUploadManager(
     }
 
     fun getActiveUpload(uploadId: String): ActiveUpload? = activeUploads[uploadId]
+
+    fun getActiveUploadCount(): Int = activeUploads.size
+
+    fun findCompletedVideoFileByUploadId(uploadId: String): File? {
+        val timestamp = if (uploadId.startsWith("upload_")) {
+            uploadId.removePrefix("upload_")
+        } else {
+            uploadId
+        }
+        // 1. Try finding in loaded metadata flow
+        val meta = _uploadedVideosFlow.value.find {
+            it.id == "vid_$timestamp" || it.fileName.startsWith("${timestamp}_")
+        }
+        if (meta != null) {
+            val file = getVideoFile(meta.fileName)
+            if (file != null && file.exists()) return file
+        }
+        // 2. Direct directory scan for files starting with timestamp_
+        val matches = uploadDir.listFiles { _, name ->
+            name.startsWith("${timestamp}_") && !name.endsWith(".meta.json")
+        }
+        val matched = matches?.firstOrNull { it.exists() && it.isFile }
+        if (matched != null && matched.canonicalPath.startsWith(uploadDir.canonicalPath)) {
+            return matched
+        }
+        // 3. Direct filename match fallback
+        return getVideoFile(uploadId)
+    }
+
+    fun cleanupStaleUploads(maxIdleMs: Long = 15 * 60 * 1000L) {
+        val now = System.currentTimeMillis()
+        val stale = activeUploads.filter { (_, upload) -> now - upload.lastActivityAt > maxIdleMs }
+        for ((id, _) in stale) {
+            markUploadFailed(id, java.io.IOException("Upload timed out after inactivity"))
+        }
+    }
 
     fun updatePlaybackProgress(videoId: String, positionMs: Long, durationMs: Long): VideoMetadata? {
         val currentList = _uploadedVideosFlow.value

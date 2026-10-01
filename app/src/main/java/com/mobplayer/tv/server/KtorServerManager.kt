@@ -256,12 +256,20 @@ class KtorServerManager @Inject constructor(
                     }
                 }
 
-                // 2. Progressive HTTP streaming for growing files
+                // 2. Progressive HTTP streaming for growing files (with fallback to completed video files)
                 get("/api/stream/{uploadId}") {
                     call.response.header(HttpHeaders.AccessControlAllowOrigin, "*")
                     val uploadId = call.parameters["uploadId"] ?: return@get call.respond(HttpStatusCode.BadRequest, "Missing upload ID")
                     val upload = videoUploadManager.getActiveUpload(uploadId)
-                        ?: return@get call.respond(HttpStatusCode.NotFound, "Active upload stream not found")
+                    if (upload == null) {
+                        // Fallback: Check if the video has completed upload and is saved on disk
+                        val completedFile = videoUploadManager.findCompletedVideoFileByUploadId(uploadId)
+                        if (completedFile != null && completedFile.exists()) {
+                            call.respondFile(completedFile)
+                            return@get
+                        }
+                        return@get call.respond(HttpStatusCode.NotFound, "Active upload stream not found")
+                    }
 
                     val rangeHeader = call.request.headers[HttpHeaders.Range]
                     val totalLength = if (upload.totalSize > 0) {

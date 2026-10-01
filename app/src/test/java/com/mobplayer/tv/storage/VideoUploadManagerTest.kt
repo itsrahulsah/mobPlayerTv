@@ -98,6 +98,16 @@ class VideoUploadManagerTest {
         assertTrue(active.isCompleted)
         assertEquals(3000L, completedMeta.fileSize)
 
+        // Verify active upload is removed from in-memory map (prevent state/memory leak)
+        assertNull(uploadManager.getActiveUpload(active.uploadId))
+        assertEquals(0, uploadManager.getActiveUploadCount())
+
+        // Verify fallback resolution finds completed video file on disk
+        val completedFile = uploadManager.findCompletedVideoFileByUploadId(active.uploadId)
+        assertNotNull(completedFile)
+        assertTrue(completedFile!!.exists())
+        assertEquals(3000L, completedFile.length())
+
         // Verify file content size on disk
         assertEquals(3000L, active.file.length())
 
@@ -109,6 +119,16 @@ class VideoUploadManagerTest {
         val videos = uploadManager.uploadedVideosFlow.value
         assertEquals(1, videos.size)
         assertEquals(customTitle, videos[0].title)
+    }
+
+    @Test
+    fun `test cleanupStaleUploads cleans timed out uploads`() {
+        val active = uploadManager.createActiveUpload("stale.mp4", "Stale", 1000L)
+        assertEquals(1, uploadManager.getActiveUploadCount())
+        // Trigger stale cleanup with 0 idle threshold
+        uploadManager.cleanupStaleUploads(maxIdleMs = -1L)
+        assertEquals(0, uploadManager.getActiveUploadCount())
+        assertFalse(active.file.exists())
     }
 
     @Test

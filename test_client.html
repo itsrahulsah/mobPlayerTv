@@ -796,8 +796,8 @@
                         const pinInput = document.getElementById('pinInput');
                         if (pinInput) pinInput.focus();
                     } else if (data.type === "STATE_UPDATE") {
-                        // Periodically sync library
-                        fetchUploadedVideos();
+                        // Throttled sync so playback progress ticks don't spam GET /api/videos
+                        throttledFetchVideos(5000);
                     }
                 } catch(e) {}
             };
@@ -1183,7 +1183,17 @@
         // ==========================================
         // 4. Stored Videos Library Management
         // ==========================================
+        let lastLibraryFetch = 0;
+        function throttledFetchVideos(minIntervalMs = 5000) {
+            const now = Date.now();
+            if (now - lastLibraryFetch >= minIntervalMs) {
+                lastLibraryFetch = now;
+                fetchUploadedVideos();
+            }
+        }
+
         async function fetchUploadedVideos() {
+            lastLibraryFetch = Date.now();
             const { httpBase } = getTargetEndpoint();
             const token = localStorage.getItem("mobplayer_token") || "";
 
@@ -1373,6 +1383,8 @@
             }
         }
 
+        let lastReconnectAttempt = 0;
+
         function handleRevisit() {
             if (isExplicitDisconnect) return;
             if (document.visibilityState === 'hidden') return;
@@ -1384,11 +1396,16 @@
                 reconnectTimer = null;
                 if (!isExplicitDisconnect && document.visibilityState !== 'hidden') {
                     if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+                        const now = Date.now();
+                        if (now - lastReconnectAttempt < 1000) {
+                            return; // Minimum 1000ms cooldown between reconnection bursts
+                        }
+                        lastReconnectAttempt = now;
                         log("Browser active: reconnecting to TV...", "var(--primary)");
                         connect();
                     }
                 }
-            }, 150);
+            }, 250);
         }
 
         document.addEventListener('visibilitychange', () => {
