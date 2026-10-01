@@ -177,7 +177,7 @@ Once authenticated, clients can issue playback control and media loading command
 #### `PlayerCommandPayload` Schema
 ```json
 {
-  "action": "PLAY | PAUSE | SEEK | SET_VOLUME",
+  "action": "PLAY | PAUSE | PLAY_PAUSE | SEEK | SET_VOLUME",
   "seekToMs": 120000,
   "volume": 0.8
 }
@@ -201,7 +201,15 @@ Once authenticated, clients can issue playback control and media loading command
 }
 ```
 
-**3. Seek Action**
+**3. Play/Pause Toggle Action**
+```json
+{
+  "type": "COMMAND",
+  "payload": "{\"action\":\"PLAY_PAUSE\"}"
+}
+```
+
+**4. Seek Action**
 ```json
 {
   "type": "COMMAND",
@@ -209,7 +217,7 @@ Once authenticated, clients can issue playback control and media loading command
 }
 ```
 
-**4. Set Volume Action**
+**5. Set Volume Action**
 ```json
 {
   "type": "COMMAND",
@@ -296,7 +304,7 @@ The TV server continuously broadcasts playback status updates to the connected a
 | `PIN_SUBMIT` | Client -> TV | 4-digit PIN string (e.g. `"1234"`) | Submit PIN displayed on TV UI |
 | `AUTH_SUCCESS` | TV -> Client | UUID Token string | Authentication successful; save token |
 | `AUTH_FAILED` | TV -> Client | `"Invalid PIN"` or `"Connection rejected by TV"` | Auth failed or denied; connection closed |
-| `COMMAND` | Client -> TV | `{"action":"PLAY\|PAUSE\|SEEK\|SET_VOLUME", "seekToMs": Long?, "volume": Float?}` | Control playback or volume actions |
+| `COMMAND` | Client -> TV | `{"action":"PLAY\|PAUSE\|PLAY_PAUSE\|SEEK\|SET_VOLUME", "seekToMs": Long?, "volume": Float?}` | Control playback or volume actions |
 | `LOAD_MEDIA` | Client -> TV | Video URL string | Load and auto-play new media item |
 | `COMMAND_SUCCESS` | TV -> Client | Action string | Acknowledgment of executed command |
 | `STATE_UPDATE` | TV -> Client | `{"isPlaying": Boolean, "positionMs": Long, "durationMs": Long, "volume": Float}` | Real-time state broadcast from ExoPlayer |

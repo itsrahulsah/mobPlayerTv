@@ -579,7 +579,7 @@ class KtorServerManager @Inject constructor(
             }
 
             // Direct action types (e.g. {"type":"PLAY","payload":""})
-            "PLAY", "PAUSE", "TOGGLE_PLAY_PAUSE", "STOP", "SEEK",
+            "PLAY", "PAUSE", "TOGGLE_PLAY_PAUSE", "PLAY_PAUSE", "STOP", "SEEK",
             "SEEK_FORWARD", "SEEK_BACKWARD", "FAST_FORWARD", "REWIND",
             "VOLUME_UP", "VOLUME_DOWN", "SET_VOLUME", "MUTE",
             "DPAD_UP", "DPAD_DOWN", "DPAD_LEFT", "DPAD_RIGHT",
