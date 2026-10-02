@@ -119,7 +119,9 @@ class MainActivity : ComponentActivity() {
             var isPlayerMinimized by rememberSaveable { mutableStateOf(false) }
             // Saved alongside isPlayerMinimized so a configuration change (which re-runs effects)
             // isn't mistaken for a player change and doesn't undo a restored minimise.
-            val playerKey = "$isPlayerActive|$activeMediaTitle"
+            // loadCount catches a new video that reuses the title (untitled casts, restarting an upload).
+            val loadCount by viewModel.mediaRepository.loadCount.collectAsState()
+            val playerKey = "$isPlayerActive|$activeMediaTitle|$loadCount"
             var lastPlayerKey by rememberSaveable { mutableStateOf(playerKey) }
             LaunchedEffect(playerKey) {
                 // Closed elsewhere, or new media opened (e.g. cast from the phone): show the player again
