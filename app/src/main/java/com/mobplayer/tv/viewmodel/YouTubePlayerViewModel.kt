@@ -48,21 +48,26 @@ class YouTubePlayerViewModel @Inject constructor(
     private var resolveJob: Job? = null
     private var suggestionsJob: Job? = null
 
+    /** [MediaRepository.loadCount] while the player holds our video (or nothing, mid-resolve). */
+    private var expectedLoadCount = 0L
+
     init {
         // Leave the screen when the player is closed elsewhere (e.g. from the phone)...
         viewModelScope.launch {
             serverRepository.isPlayerActive.collect { active -> if (!active) dismiss() }
         }
-        // ...or when other media (an upload, a phone-cast URL) replaces our video.
+        // ...or when other media (an upload, a phone-cast URL) is loaded, even mid-resolve or on
+        // the error screen...
+        viewModelScope.launch {
+            mediaRepository.loadCount.collect { count ->
+                if (_uiState.value.item != null && count != expectedLoadCount) dismiss()
+            }
+        }
+        // ...or when our video is stopped elsewhere.
         viewModelScope.launch {
             mediaRepository.currentMediaId.collect { mediaId ->
                 val state = _uiState.value
-                val videoId = state.item?.youtubeVideoId ?: return@collect
-                if (mediaId == videoId) return@collect
-                // While resolving or on the error screen nothing of ours is loaded (play() stopped the
-                // player), so only a newly loaded media id counts; once playing, a stop counts too.
-                val ownsPlayer = !state.isResolving && state.error == null
-                if (mediaId != null || ownsPlayer) dismiss()
+                if (state.item != null && !state.isResolving && state.error == null && mediaId == null) dismiss()
             }
         }
     }
@@ -75,6 +80,7 @@ class YouTubePlayerViewModel @Inject constructor(
         // Stop whatever was playing so its audio doesn't continue while the stream resolves.
         mediaRepository.stop()
         serverRepository.openPlayer(item.title)
+        expectedLoadCount = mediaRepository.loadCount.value
 
         // Fetched independently so a slow/failed suggestions call never delays playback.
         suggestionsJob = viewModelScope.launch {
@@ -97,7 +103,8 @@ class YouTubePlayerViewModel @Inject constructor(
                     fail((source as? PlaybackSource.Error)?.message ?: "No playable stream found")
                     return@launch
                 }
-                // Clear isResolving first so the takeover watcher recognises our own media id.
+                // Set before loading so the takeover watcher recognises our own load.
+                expectedLoadCount = mediaRepository.loadCount.value + 1
                 _uiState.update { it.copy(isResolving = false) }
                 mediaRepository.loadMediaSource(mediaSource, videoId)
                 serverRepository.postRemoteAction(

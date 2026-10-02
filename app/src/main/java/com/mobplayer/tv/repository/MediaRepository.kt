@@ -37,6 +37,10 @@ class MediaRepository @Inject constructor(
     /** Id of the media currently loaded (null when stopped); lets screens detect a takeover. */
     private val _currentMediaId = MutableStateFlow<String?>(null)
     val currentMediaId: StateFlow<String?> = _currentMediaId
+
+    /** Bumped on every load, so a takeover is visible even for URL casts that carry no media id. */
+    private val _loadCount = MutableStateFlow(0L)
+    val loadCount: StateFlow<Long> = _loadCount
     var onPlaybackProgressUpdate: ((videoId: String, positionMs: Long, durationMs: Long) -> Unit)? = null
     var onPlaybackError: ((error: androidx.media3.common.PlaybackException) -> Unit)? = null
 
@@ -161,6 +165,7 @@ class MediaRepository @Inject constructor(
         videoId: String? = null,
         mimeType: String? = null
     ) {
+        _loadCount.value++
         activePlayingVideoId = videoId
         val builder = MediaItem.Builder().setUri(url)
         val resolvedMime = if (!mimeType.isNullOrBlank()) {
@@ -210,6 +215,7 @@ class MediaRepository @Inject constructor(
     /** Plays a pre-built source (e.g. a YouTube DASH manifest that needs custom headers). */
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     fun loadMediaSource(mediaSource: androidx.media3.exoplayer.source.MediaSource, videoId: String) {
+        _loadCount.value++
         activePlayingVideoId = videoId
         player?.setMediaSource(mediaSource)
         player?.prepare()
