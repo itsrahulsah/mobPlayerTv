@@ -111,3 +111,18 @@ The project uses Dagger Hilt with constructor injection and clean repository pat
 ## Keep Screen On During Playback
 - `MainActivity` adds `WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON` while `isPlayerActive && playerState.isPlaying`, and clears it when paused, stopped or the player closes. Applies to both the regular player and the YouTube player.
 - **Known gap**: buffering (`isPlaying == false`) does not hold the screen on, so a stall longer than the TV's sleep timeout (e.g. slow upload stream) can still let it sleep.
+
+## Player Takeover & Minimise Rules (Phase 9 review fixes)
+- **Takeover detection**: `MediaRepository.loadCount` increments on every `loadMedia` / `loadMediaSource`. Phone URL casts load with no media id, so `currentMediaId` alone can't detect them (and `activePlayingVideoId` drives upload resume progress, so casts must not get a fake id). `YouTubePlayerViewModel` stores `expectedLoadCount` (set in `play()` and just before its own load); any other load dismisses the YouTube screen and cancels the pending lookup. `currentMediaId` going null while playing still means "stopped elsewhere".
+- **Minimise** (`isPlayerMinimized`, `rememberSaveable`): typing from the phone minimises the player behind Search. It is restored when `isPlayerActive`/title change or a new load arrives, except the open YouTube video's own load (`YouTubePlayerViewModel.isOwnLoad`). Last key and load count are saved so a configuration change doesn't un-minimise.
+- **Screen transition**: `AnimatedContent` target is `(playerOpen, youTubeStateOrNull)` keyed only on `playerOpen`, so a closing YouTube screen fades out with its last state and YouTube changes while minimised don't re-key the browse screen.
+- **Remote key routing**: `isUiNavigating` = minimised || "Up next" open || YouTube error panel showing (`onErrorVisibleChange`). Key-injection fallback sends Back through `onBackPressedDispatcher` (a raw Back key would become a Compose focus move), so the YouTube screen also has a `BackHandler` that closes "Up next" first.
+- **Pairing dialog** (`TvModalOverlay` with `onBack`): a disconnect can show it over a playing video; Back closes that player first, then `finish()` when nothing is playing.
+
+## YouTube Stream Lookup Notes
+- `SmartTubePlayerEngine.resolvePlaybackSource` runs on IO; its library calls block and ignore cancellation, so `ensureActive()` is checked between strategies, at each fallback attempt and before `switchNextClientNow()` (the client is shared global state).
+- `buildMediaSource` (DASH manifest parse) runs on `Dispatchers.Default`.
+- InnerTube lockups: only `LOCKUP_CONTENT_TYPE_VIDEO` → `CompactVideo`, `..._PLAYLIST` → `CompactPlaylist`, others skipped.
+
+## Device Decoder Limits
+- Single-track files (uploads/casts) are played even if the decoder reports `NO_EXCEEDS_CAPABILITIES`, then fail mid-decode (seen: 4K H.264 High@5.1 on `OMX.MS.AVC.Decoder`). YouTube adaptive streams avoid this because the track selector skips unsupported renditions. Decoder fallback doesn't help (it only applies at decoder init).

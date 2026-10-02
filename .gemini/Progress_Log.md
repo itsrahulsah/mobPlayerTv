@@ -71,7 +71,7 @@
 ---
 
 ## Phase 9: YouTube Integration, Remote Keyboard & Playback Fixes
-**Status: IN PROGRESS** (branch `youtbe-implementation`, uncommitted as of 2026-10-02)
+**Status: COMPLETED** (merged to `master` as PR #5, `07f666f`, 2026-10-03)
 - **Task 9.1:** YouTube home feed, category bar, Search tab and recent searches (`youtubecrawler` module, `YouTubeRepository`, `YouTubeFeedViewModel`, `YouTubeSearchViewModel`, `TvYouTubeCategoryBar`, `TvYouTubeSearchBar`).
 - **Task 9.2:** YouTube playback via vendored SmartTube MediaServiceCore AARs in `app/libs/` (~36 MB, un-ignored with `!app/libs/*.aar`). `SmartTubePlayerEngine` resolves DASH MPD / HLS / DASH URL / progressive sources; `TvYouTubePlayerScreen` + `YouTubePlayerViewModel` play them on the shared `MediaRepository` ExoPlayer so the phone remote keeps working.
 - **Task 9.3:** Remote keyboard: `TEXT_INPUT` / `TEXT_SUBMIT` WebSocket messages mirror phone text into the TV's YouTube search field (documented in `APP_CONTROL_CONTRACT.md` §6.3, added to `test_client.html`).
@@ -80,3 +80,16 @@
 - **Task 9.6:** Replaced `material-icons-extended` with a small local icon set (`ui/icons/ExtendedIcons.kt`); removed `MockMediaRepository` and the Movies / Shows / Live TV tabs.
 - **Task 9.7 (fix):** `SocketTimeoutException` when streaming a large (~600 MB) MKV during upload. See "Upload Streaming: MKV Timeout Fix" in `project_context.md`.
 - **Task 9.8 (fix):** TV display slept during playback. `MainActivity` now sets `FLAG_KEEP_SCREEN_ON` while a video is playing.
+- **Task 9.9 (review fixes, before merge):**
+  - Phone casts / uploads now replace a YouTube video even while it is loading or on its error screen (`MediaRepository.loadCount` takeover detection).
+  - Phone remote drives the YouTube error panel (Retry/Back) instead of seeking or toggling playback.
+  - Stream lookup fallback loop checks for cancellation, so an abandoned lookup stops rotating the shared YouTube client; DASH manifest is built off the main thread.
+  - Minimised player: survives configuration changes, comes back for any new load (including same-title casts), but not for the open YouTube video's own stream finishing.
+  - YouTube player fades out as itself on close (no flash of the regular player).
+  - Search: spinner no longer sticks when a running search is cancelled; recent-search chips use `recent_` keys, line breaks are stripped and recents de-duplicated on load (duplicate keys crashed the list).
+  - Only `LOCKUP_CONTENT_TYPE_VIDEO` lockups become video cards (albums/podcasts failed with "No playable stream found").
+  - Back on the pairing dialog closes a playing video first and only exits the app when nothing is playing.
+  - Back via the phone's key-injection fallback closes the "Up next" row first.
+
+## Open Items
+- **4K H.264 on low-end TV decoders**: e.g. a 3840×1728 `avc1.640033` (High@5.1) upload fails on `OMX.MS.AVC.Decoder` with `NO_EXCEEDS_CAPABILITIES`. Hardware limit, not an app bug; the file must be re-encoded (1080p H.264 or HEVC). Possible improvement: show a readable message on the phone and TV error screen instead of the raw ExoPlayer text.
