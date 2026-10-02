@@ -14,6 +14,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -47,6 +49,7 @@ import com.mobplayer.tv.models.RemoteIconType
 import com.mobplayer.tv.service.WebSocketServerService
 import com.mobplayer.tv.ui.components.TvModalOverlay
 import com.mobplayer.tv.ui.components.TvRemoteActionHud
+import com.mobplayer.tv.ui.components.TvStartupLoader
 import com.mobplayer.tv.ui.components.TvVideoPlayerOverlay
 import com.mobplayer.tv.ui.focus.BrowseFocusState
 import com.mobplayer.tv.ui.focus.LocalBrowseFocus
@@ -58,6 +61,8 @@ import com.mobplayer.tv.ui.youtube.TvYouTubePlayerScreen
 import com.mobplayer.tv.ui.pairing.TvPairingScreen
 import com.mobplayer.tv.ui.theme.TvColors
 import androidx.activity.viewModels
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import kotlinx.coroutines.delay
 import dagger.hilt.android.AndroidEntryPoint
 import java.util.concurrent.Executors
 import com.mobplayer.tv.viewmodel.TvMainViewModel
@@ -72,6 +77,8 @@ class MainActivity : ComponentActivity() {
     private val youTubeSearchViewModel: YouTubeSearchViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Branded splash instead of a blank window during cold start; hands off to TvStartupLoader
+        installSplashScreen()
         super.onCreate(savedInstanceState)
 
         val player = viewModel.initializePlayer()
@@ -92,9 +99,16 @@ class MainActivity : ComponentActivity() {
                 if (!injected) runOnUiThread { dispatchRemoteKeyDirectly(keyCode) }
             }
         }
-        // Start the WebSocket Ktor Service
-        Intent(this, WebSocketServerService::class.java).also { intent ->
-            startForegroundService(intent)
+        // Start the WebSocket Ktor Service. A plain start from the visible activity is allowed and,
+        // unlike startForegroundService, has no 10s startForeground() deadline: on a busy TV the
+        // service's onCreate can queue behind this activity's first frame for longer than that (ANR).
+        // The service still promotes itself to foreground in onCreate.
+        val serviceIntent = Intent(this, WebSocketServerService::class.java)
+        try {
+            startService(serviceIntent)
+        } catch (e: IllegalStateException) {
+            // Recreated while in the background, where plain starts are refused
+            startForegroundService(serviceIntent)
         }
 
         setContent {
@@ -155,6 +169,17 @@ class MainActivity : ComponentActivity() {
                 selectedHomeTab = homeTab
             }
             val playerState by viewModel.playerStateFlow.collectAsState()
+
+            // Startup loader stays up until the control server posts its first PIN (or a remote is
+            // already connected), so the pairing dialog doesn't pop in over a half-ready home screen.
+            // Latched once done; the timeout keeps a server that fails to start from trapping the user.
+            val isConnected by viewModel.serverRepository.isConnected.collectAsState()
+            var isStartupDone by rememberSaveable { mutableStateOf(false) }
+            if (connectionEvent != ConnectionEvent.None || isConnected) isStartupDone = true
+            LaunchedEffect(Unit) {
+                delay(STARTUP_LOADER_TIMEOUT_MS)
+                isStartupDone = true
+            }
 
             // Keep the display awake while a video plays (both players share the same ExoPlayer);
             // paused/stopped playback lets the TV sleep normally.
@@ -343,6 +368,14 @@ class MainActivity : ComponentActivity() {
 
                         // Floating Remote Action HUD (renders on top of all screens)
                         TvRemoteActionHud(viewModel = viewModel)
+
+                        AnimatedVisibility(
+                            visible = !isStartupDone,
+                            enter = EnterTransition.None,
+                            exit = fadeOut(animationSpec = tween(300))
+                        ) {
+                            TvStartupLoader()
+                        }
                     }
                 }
             }
@@ -396,6 +429,8 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 }
+
+private const val STARTUP_LOADER_TIMEOUT_MS = 8_000L
 
 @Composable
 private fun ConnectionConflictDialog(

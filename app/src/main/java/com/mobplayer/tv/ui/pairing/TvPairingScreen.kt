@@ -1,6 +1,7 @@
 package com.mobplayer.tv.ui.pairing
 
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -15,14 +16,18 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -30,7 +35,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mobplayer.tv.R
 import com.mobplayer.tv.ui.theme.TvColors
-import com.mobplayer.tv.ui.icons.Tv
 import com.mobplayer.tv.ui.icons.Wifi
 
 @Composable
@@ -42,17 +46,19 @@ fun TvPairingScreen(
     onEnterDemoMode: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Pulse animation for the connection indicator
+    // "Waiting for your phone" indicator: a softly pulsing green dot
     val infiniteTransition = rememberInfiniteTransition(label = "pulseTransition")
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.15f,
+    val waitingPulse by infiniteTransition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1400, easing = FastOutSlowInEasing),
+            animation = tween(900, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "pulseScale"
+        label = "waitingPulse"
     )
+
+    val cardShape = RoundedCornerShape(20.dp)
 
     // Transparent: shown inside TvModalOverlay, so the running screen stays visible around the card
     Box(
@@ -63,96 +69,127 @@ fun TvPairingScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
             modifier = Modifier
-                .width(620.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .background(TvColors.SurfaceDark.copy(alpha = 0.78f))
-                .border(1.5.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(24.dp))
-                .shadow(24.dp, RoundedCornerShape(24.dp))
-                .padding(horizontal = 36.dp, vertical = 24.dp)
-        ) {
-            // Pulsing TV Icon
-            Box(
-                modifier = Modifier
-                    .size(60.dp)
-                    .scale(pulseScale)
-                    .clip(CircleShape)
-                    .background(
-                        Brush.linearGradient(
-                            listOf(TvColors.PrimaryAccent, TvColors.PrimaryAccentDeep)
-                        )
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Tv,
-                    contentDescription = stringResource(R.string.app_name),
-                    tint = Color.White,
-                    modifier = Modifier.size(32.dp)
+                .width(520.dp)
+                // Shadow before the clip, or the clip cuts it off
+                .shadow(20.dp, cardShape)
+                .clip(cardShape)
+                // See-through glass: the running screen shows behind, dimmed enough to keep text legible
+                .background(
+                    Brush.verticalGradient(
+                        listOf(TvColors.SurfaceElevated.copy(alpha = 0.72f), TvColors.SurfaceDark.copy(alpha = 0.80f))
+                    )
                 )
-            }
+                // Soft brand-red glow behind the logo
+                .drawBehind {
+                    drawRect(
+                        Brush.radialGradient(
+                            colors = listOf(TvColors.PrimaryAccent.copy(alpha = 0.22f), Color.Transparent),
+                            center = Offset(size.width / 2f, 0f),
+                            radius = size.width * 0.45f
+                        )
+                    )
+                }
+                .border(1.dp, Color.White.copy(alpha = 0.10f), cardShape)
+                .padding(horizontal = 28.dp, vertical = 18.dp)
+        ) {
+            // App logo (same lockup as the home top bar)
+            Image(
+                painter = painterResource(R.drawable.logo_wordmark),
+                contentDescription = stringResource(R.string.app_name),
+                modifier = Modifier
+                    .height(36.dp)
+                    .aspectRatio(609f / 176f) // logo_wordmark is 609 x 176
+            )
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             Text(
                 text = stringResource(R.string.pairing_title),
                 color = Color.White,
-                fontSize = 22.sp,
+                fontSize = 19.sp,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             Text(
                 text = stringResource(R.string.pairing_subtitle),
                 color = TvColors.TextSecondary,
-                fontSize = 13.sp,
+                fontSize = 12.sp,
                 textAlign = TextAlign.Center,
-                lineHeight = 18.sp
+                lineHeight = 17.sp
             )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // PIN Display Card
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Color.Black.copy(alpha = 0.7f))
-                    .border(2.dp, TvColors.SecondaryAccent.copy(alpha = 0.6f), RoundedCornerShape(14.dp))
-                .padding(horizontal = 32.dp, vertical = 12.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = pin.map { "$it " }.joinToString("").trimEnd(),
-                    color = TvColors.SecondaryAccent,
-                    fontSize = 38.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 8.sp
-                )
-            }
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Wi-Fi / Discovery Information
+            // PIN: one tile per digit so it reads at a glance from the sofa
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                pin.forEach { digit ->
+                    Box(
+                        modifier = Modifier
+                            .size(width = 48.dp, height = 58.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color.Black.copy(alpha = 0.55f))
+                            .border(2.dp, TvColors.SecondaryAccent.copy(alpha = 0.55f), RoundedCornerShape(12.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = digit.toString(),
+                            color = TvColors.SecondaryAccent,
+                            fontSize = 30.sp,
+                            fontWeight = FontWeight.Black
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Live status: waiting for a phone to pair
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .alpha(waitingPulse)
+                        .clip(CircleShape)
+                        .background(TvColors.ConnectedGreen)
+                )
+                Text(
+                    text = stringResource(R.string.pairing_waiting),
+                    color = TvColors.TextSecondary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Server address (for entering it manually on the phone)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color.White.copy(alpha = 0.05f))
-                    .padding(horizontal = 14.dp, vertical = 8.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    // Solid fill: the card is see-through, so the address needs its own backdrop to stay legible
+                    .background(TvColors.BackgroundDark)
+                    .border(1.dp, TvColors.ConnectedGreen.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Wifi,
                     contentDescription = stringResource(R.string.pairing_wifi_desc),
                     tint = TvColors.ConnectedGreen,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(14.dp)
                 )
                 Text(
                     text = if (isEmulator) stringResource(R.string.tv_server_emulator, port)
                            else if (!serverIp.isNullOrBlank()) stringResource(R.string.tv_server_ip, serverIp, port)
                            else stringResource(R.string.tv_server_port, port),
-                    color = TvColors.TextTertiary,
+                    color = Color.White,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium
                 )
@@ -184,7 +221,7 @@ fun TvPairingScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             // Demo Mode / Preview Button
             var isDemoFocused by remember { mutableStateOf(false) }
@@ -208,18 +245,18 @@ fun TvPairingScreen(
                     .onFocusChanged { isDemoFocused = it.isFocused }
                     .focusable()
                     .clickable { onEnterDemoMode() }
-                    .padding(horizontal = 24.dp, vertical = 12.dp)
+                    .padding(horizontal = 20.dp, vertical = 9.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.PlayArrow,
                     contentDescription = stringResource(R.string.demo_mode_desc),
                     tint = if (isDemoFocused) Color.Black else Color.White,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(16.dp)
                 )
                 Text(
                     text = stringResource(R.string.preview_tv_home),
                     color = if (isDemoFocused) Color.Black else Color.White,
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Bold
                 )
             }

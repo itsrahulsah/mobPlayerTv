@@ -2,6 +2,7 @@ package com.mobplayer.tv.ui.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,8 +20,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -31,7 +32,9 @@ import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.*
 import com.mobplayer.tv.ui.icons.CastConnected
-import com.mobplayer.tv.ui.icons.Tv
+
+/** Width / height of R.drawable.logo_wordmark (609 x 176). */
+private const val LOGO_WORDMARK_ASPECT_RATIO = 609f / 176f
 
 @Composable
 fun TvTopBar(
@@ -71,52 +74,14 @@ fun TvTopBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            // App Branding Logo
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(
-                            Brush.linearGradient(
-                                listOf(TvColors.PrimaryAccent, TvColors.PrimaryAccentDark)
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Tv,
-                        contentDescription = stringResource(R.string.app_logo_description),
-                        tint = Color.White,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-
-                Text(
-                    text = stringResource(R.string.brand_name),
-                    color = Color.White,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = 2.sp
-                )
-
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(TvColors.SecondaryAccent.copy(alpha = 0.2f))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.brand_tag),
-                        color = TvColors.SecondaryAccent,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
+            // App Branding Logo: full "MobPlayer TV" lockup on a transparent background
+            Image(
+                painter = painterResource(R.drawable.logo_wordmark),
+                contentDescription = stringResource(R.string.app_logo_description),
+                modifier = Modifier
+                    .height(44.dp)
+                    .aspectRatio(LOGO_WORDMARK_ASPECT_RATIO)
+            )
 
             Spacer(modifier = Modifier.width(16.dp))
 
