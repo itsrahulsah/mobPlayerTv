@@ -411,7 +411,7 @@ class InnerTubeClient(
                     playlistId = contentId,
                     endpoint = "/playlist?list=$contentId"
                 )
-            } else {
+            } else if (contentType == "LOCKUP_CONTENT_TYPE_VIDEO") {
                 return CompactVideo(
                     title = title,
                     channelTitle = channelTitle,
@@ -422,6 +422,8 @@ class InnerTubeClient(
                     endpoint = "/watch?v=$contentId"
                 )
             }
+            // Albums, podcasts, etc.: contentId isn't a video id, so a card would never play.
+            return null
         }
 
         if (obj.has("compactVideoRenderer")) {

@@ -124,6 +124,9 @@ class YouTubePlayerViewModel @Inject constructor(
         }
     }
 
+    /** True when load number [count] is this screen's own video, not media replacing it. */
+    fun isOwnLoad(count: Long): Boolean = _uiState.value.item != null && count == expectedLoadCount
+
     fun retry() {
         _uiState.value.item?.let(::play)
     }

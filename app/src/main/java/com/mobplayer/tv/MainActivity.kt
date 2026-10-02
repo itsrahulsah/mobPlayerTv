@@ -119,16 +119,19 @@ class MainActivity : ComponentActivity() {
             var isPlayerMinimized by rememberSaveable { mutableStateOf(false) }
             // Saved alongside isPlayerMinimized so a configuration change (which re-runs effects)
             // isn't mistaken for a player change and doesn't undo a restored minimise.
+            val playerKey = "$isPlayerActive|$activeMediaTitle"
+            var lastPlayerKey by rememberSaveable { mutableStateOf(playerKey) }
             // loadCount catches a new video that reuses the title (untitled casts, restarting an upload).
             val loadCount by viewModel.mediaRepository.loadCount.collectAsState()
-            val playerKey = "$isPlayerActive|$activeMediaTitle|$loadCount"
-            var lastPlayerKey by rememberSaveable { mutableStateOf(playerKey) }
-            LaunchedEffect(playerKey) {
+            var lastLoadCount by rememberSaveable { mutableLongStateOf(loadCount) }
+            LaunchedEffect(playerKey, loadCount) {
+                // The open YouTube video's stream finishing its resolve isn't new media; leave it
+                // minimised so it doesn't cover a search being typed.
+                val isNewLoad = loadCount != lastLoadCount && !youTubePlayerViewModel.isOwnLoad(loadCount)
                 // Closed elsewhere, or new media opened (e.g. cast from the phone): show the player again
-                if (playerKey != lastPlayerKey) {
-                    lastPlayerKey = playerKey
-                    isPlayerMinimized = false
-                }
+                if (playerKey != lastPlayerKey || isNewLoad) isPlayerMinimized = false
+                lastPlayerKey = playerKey
+                lastLoadCount = loadCount
             }
             // While browsing UI over a playing video, remote Left/Right/OK/Back navigate instead of
             // seeking / toggling playback / closing the player.
