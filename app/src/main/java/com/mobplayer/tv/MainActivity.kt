@@ -185,21 +185,26 @@ class MainActivity : ComponentActivity() {
                         contentAlignment = Alignment.Center
                     ) {
                         // Running screen (home/search/player) always renders; pairing and conflict prompts overlay it
+                        // The YouTube state rides in the target state so a closing YouTube screen fades out
+                        // as itself (its live state is already empty) instead of as the regular player.
+                        // Keyed on open/closed only, so YouTube changes while minimised don't re-key the
+                        // browse screen and switching player types stays an instant swap as before.
                         AnimatedContent(
-                            targetState = isPlayerActive && !isPlayerMinimized,
+                            targetState = (isPlayerActive && !isPlayerMinimized) to youTubePlayerState.takeIf { it.item != null },
                             transitionSpec = {
                                 fadeIn(animationSpec = tween(120)) togetherWith fadeOut(animationSpec = tween(120))
                             },
+                            contentKey = { it.first },
                             label = "ScreenTransition"
-                        ) { playerOpen ->
-                            if (playerOpen && youTubePlayerState.item != null) {
+                        ) { (playerOpen, shownYouTubeState) ->
+                            if (playerOpen && shownYouTubeState != null) {
                                 // Dedicated YouTube player screen
                                 TvYouTubePlayerScreen(
                                     player = player,
-                                    state = youTubePlayerState,
+                                    state = shownYouTubeState,
                                     playerState = playerState,
                                     onTogglePlay = {
-                                        if (!youTubePlayerState.isResolving) {
+                                        if (!shownYouTubeState.isResolving) {
                                             if (playerState?.isPlaying == true) viewModel.mediaRepository.pause()
                                             else viewModel.mediaRepository.play()
                                         }

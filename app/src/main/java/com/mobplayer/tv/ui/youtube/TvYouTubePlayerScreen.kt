@@ -1,6 +1,7 @@
 package com.mobplayer.tv.ui.youtube
 
 import android.view.KeyEvent
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -104,6 +105,9 @@ fun TvYouTubePlayerScreen(
     val currentOnSuggestionsVisibleChange by rememberUpdatedState(onSuggestionsVisibleChange)
     LaunchedEffect(showSuggestions) { currentOnSuggestionsVisibleChange(showSuggestions) }
     DisposableEffect(Unit) { onDispose { currentOnSuggestionsVisibleChange(false) } }
+    // Back that skips key events (the phone remote's fallback when key injection is refused) must
+    // also close only the suggestions row first, like the onPreviewKeyEvent handler below.
+    BackHandler(enabled = showSuggestions && error == null) { showSuggestions = false }
     val rootFocus = remember { FocusRequester() }
     val playPauseFocus = remember { FocusRequester() }
     val suggestionsFocus = remember { FocusRequester() }

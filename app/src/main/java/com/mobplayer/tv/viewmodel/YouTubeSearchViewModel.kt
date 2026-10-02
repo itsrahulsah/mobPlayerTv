@@ -103,19 +103,24 @@ class YouTubeSearchViewModel @Inject constructor(
     }
 
     private fun addRecent(query: String) {
-        val updated = (listOf(query) + _uiState.value.recentSearches.filterNot { it.equals(query, ignoreCase = true) })
+        // Recents are stored newline-separated; a line break in a phone-typed query would split it.
+        val entry = query.replace(LINE_BREAKS, " ")
+        val updated = (listOf(entry) + _uiState.value.recentSearches.filterNot { it.equals(entry, ignoreCase = true) })
             .take(MAX_RECENTS)
         prefs.edit().putString(KEY_RECENTS, updated.joinToString(SEPARATOR)).apply()
         _uiState.update { it.copy(recentSearches = updated) }
     }
 
     private fun loadRecents(): List<String> =
-        prefs.getString(KEY_RECENTS, null)?.split(SEPARATOR)?.filter { it.isNotBlank() }.orEmpty()
+        // Deduplicated in case older saves were split by a line break; chips are keyed by text.
+        prefs.getString(KEY_RECENTS, null)?.split(SEPARATOR)?.filter { it.isNotBlank() }
+            ?.distinctBy { it.lowercase() }.orEmpty()
 
     private companion object {
         const val PREFS_NAME = "youtube_search"
         const val KEY_RECENTS = "recent_searches"
         const val SEPARATOR = "\n"
+        val LINE_BREAKS = Regex("[\r\n]+")
         const val MAX_RECENTS = 8
         const val MIN_QUERY_LENGTH = 2
         const val TYPING_DEBOUNCE_MS = 800L
