@@ -95,3 +95,19 @@ The project uses Dagger Hilt with constructor injection and clean repository pat
 - `POST /api/videos/{id}/play`: Play / Resume video at saved position.
 - `DELETE /api/videos/{id}` / `DELETE /api/videos`: Storage management and cleanup.
 
+
+## YouTube Integration (Phase 9)
+- **Feed & search**: `youtubecrawler` Gradle library module + `YouTubeRepository` provide the home feed, categories and search. Remote text (`TEXT_INPUT` / `TEXT_SUBMIT`) opens the Search tab and mirrors the phone's text into the search field.
+- **Playback**: `SmartTubePlayerEngine` (initialised in `MobPlayerTvApp.onCreate`) uses the SmartTube AARs in `app/libs/` to decipher streams. Source priority: HLS for live → DASH MPD built from adaptive formats → HLS URL → DASH URL → progressive URL. Media sources use a `DefaultHttpDataSource` with the SmartTube user agent and 20 s timeouts.
+- **Shared player**: YouTube playback goes through `MediaRepository.loadMediaSource()`, the same ExoPlayer used for uploads, so remote play/pause/seek/volume work for both.
+- **Key routing**: `ServerRepository.isUiNavigating` is true while the user browses UI over a playing video; `KtorServerManager.playerHandlesKeys()` then sends Left/Right/OK/Back to the UI instead of the player.
+
+## Upload Streaming: MKV Timeout Fix
+- **Symptom**: Web client → select video → start streaming of a ~600 MB MKV failed with `ExoPlaybackException: Source error … SocketTimeoutException: timeout` (stack: `ProgressiveMediaPeriod` → `MatroskaExtractor` → `DefaultHttpDataSource`).
+- **Cause**: The player reads `http://127.0.0.1:<port>/api/stream/{uploadId}` while the file is still being written; the server holds the response until the requested bytes arrive. Large MKVs store their Cues (seek index) at the end of the file, and `MatroskaExtractor` seeks there first, so the server waits for almost the whole upload. ExoPlayer's default 8 s read timeout fired and retries ran out.
+- **Fix** (`MediaRepository.buildGrowingUploadSource`, used only for localhost `/api/stream/` URLs): `MatroskaExtractor.FLAG_DISABLE_SEEK_FOR_CUES`, 60 s read timeout, `DefaultLoadErrorHandlingPolicy(30)` retries. Stored files (`file://`), YouTube and phone-cast URLs are unchanged.
+- **Trade-offs**: an MKV played this way can't be seeked until it is replayed from storage; MP4s with `moov` at the end still wait for nearly the full upload (the client-side `ensureFastStart()` helps); uploads slower than the video bitrate cause rebuffering.
+
+## Keep Screen On During Playback
+- `MainActivity` adds `WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON` while `isPlayerActive && playerState.isPlaying`, and clears it when paused, stopped or the player closes. Applies to both the regular player and the YouTube player.
+- **Known gap**: buffering (`isPlaying == false`) does not hold the screen on, so a stall longer than the TV's sleep timeout (e.g. slow upload stream) can still let it sleep.

@@ -14,8 +14,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CastConnected
-import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -40,6 +38,8 @@ import com.mobplayer.tv.R
 import com.mobplayer.tv.viewmodel.TvMainViewModel
 import com.mobplayer.tv.ui.theme.TvColors
 import kotlinx.coroutines.delay
+import com.mobplayer.tv.ui.icons.CastConnected
+import com.mobplayer.tv.ui.icons.Pause
 
 @Composable
 fun TvVideoPlayerOverlay(

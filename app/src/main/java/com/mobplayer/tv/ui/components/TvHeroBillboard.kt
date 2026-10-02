@@ -33,6 +33,8 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.mobplayer.tv.R
 import com.mobplayer.tv.data.models.MediaItemModel
+import com.mobplayer.tv.ui.focus.LocalBrowseFocus
+import com.mobplayer.tv.ui.focus.restoreFocus
 import com.mobplayer.tv.ui.theme.TvColors
 
 @Composable
@@ -126,7 +128,7 @@ fun TvHeroBillboard(
                 }
 
                 // IMDb Rating
-                Row(
+                if (item.rating.isNotEmpty()) Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     modifier = Modifier
@@ -149,15 +151,16 @@ fun TvHeroBillboard(
                 }
 
                 // Release Year & Duration
-                Text(
-                    text = "${item.year} • ${item.duration}",
+                val yearAndDuration = listOf(item.year, item.duration).filter { it.isNotEmpty() }.joinToString(" • ")
+                if (yearAndDuration.isNotEmpty()) Text(
+                    text = yearAndDuration,
                     color = TvColors.TextSecondary,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium
                 )
 
                 // Age Rating Tag
-                Box(
+                if (item.contentRating.isNotEmpty()) Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(3.dp))
                         .border(1.dp, TvColors.TextTertiary, RoundedCornerShape(3.dp))
@@ -211,11 +214,18 @@ fun TvHeroBillboard(
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                val browseFocus = LocalBrowseFocus.current
+                val playKey = "hero/${item.id}/play"
+                val detailsKey = "hero/${item.id}/details"
                 TvActionButton(
                     icon = Icons.Default.PlayArrow,
                     label = stringResource(R.string.btn_watch_now),
                     isPrimary = true,
-                    onClick = onPlayClick
+                    onClick = {
+                        browseFocus.onItemClicked(playKey)
+                        onPlayClick()
+                    },
+                    modifier = Modifier.restoreFocus(playKey)
                 )
 
                 TvActionButton(
@@ -229,7 +239,11 @@ fun TvHeroBillboard(
                     icon = Icons.Default.Info,
                     label = stringResource(R.string.btn_details),
                     isPrimary = false,
-                    onClick = onDetailsClick
+                    onClick = {
+                        browseFocus.onItemClicked(detailsKey)
+                        onDetailsClick()
+                    },
+                    modifier = Modifier.restoreFocus(detailsKey)
                 )
             }
         }
@@ -241,7 +255,8 @@ fun TvActionButton(
     icon: ImageVector,
     label: String,
     isPrimary: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     var isFocused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(targetValue = if (isFocused) 1.08f else 1f, label = "btnScale")
@@ -266,7 +281,7 @@ fun TvActionButton(
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier
+        modifier = modifier
             .scale(scale)
             .clip(RoundedCornerShape(10.dp))
             .background(bgColor)

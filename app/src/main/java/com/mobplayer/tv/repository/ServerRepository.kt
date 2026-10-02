@@ -4,7 +4,9 @@ import android.util.Log
 import com.mobplayer.tv.models.RemoteActionEvent
 import com.mobplayer.tv.viewmodel.ConnectionEvent
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -29,10 +31,29 @@ class ServerRepository @Inject constructor() {
     private val _isPlayerActive = MutableStateFlow<Boolean>(false)
     val isPlayerActive: StateFlow<Boolean> = _isPlayerActive
 
+    /**
+     * True while the user navigates UI on top of playing media (suggestions row, search over a
+     * minimized video): remote D-pad/OK/Back then go to the UI instead of seek/play-pause/close.
+     */
+    private val _isUiNavigating = MutableStateFlow(false)
+    val isUiNavigating: StateFlow<Boolean> = _isUiNavigating
+
+    fun setUiNavigating(navigating: Boolean) {
+        _isUiNavigating.value = navigating
+    }
+
     private val _remoteActionEvent = MutableStateFlow<RemoteActionEvent?>(null)
     val remoteActionEvent: StateFlow<RemoteActionEvent?> = _remoteActionEvent
 
     var onInjectKeyEvent: ((Int) -> Unit)? = null
+
+    /** Text typed on a remote (TEXT_INPUT / TEXT_SUBMIT); the UI routes it to the search field. */
+    private val _remoteTextInput = MutableSharedFlow<RemoteTextInput>(extraBufferCapacity = 64)
+    val remoteTextInput: SharedFlow<RemoteTextInput> = _remoteTextInput
+
+    fun postRemoteText(text: String, submit: Boolean) {
+        _remoteTextInput.tryEmit(RemoteTextInput(text, submit))
+    }
     var onRequestNewPin: (() -> String)? = null
     var onCloseSession: (() -> Unit)? = null
 
@@ -147,3 +168,6 @@ class ServerRepository @Inject constructor() {
         }
     }
 }
+
+/** @param submit true when the remote pressed Enter/Search rather than just editing the text. */
+data class RemoteTextInput(val text: String, val submit: Boolean)

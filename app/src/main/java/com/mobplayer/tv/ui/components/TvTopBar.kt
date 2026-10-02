@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CastConnected
-import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -32,6 +30,8 @@ import com.mobplayer.tv.ui.theme.TvColors
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.*
+import com.mobplayer.tv.ui.icons.CastConnected
+import com.mobplayer.tv.ui.icons.Tv
 
 @Composable
 fun TvTopBar(
@@ -43,9 +43,7 @@ fun TvTopBar(
 ) {
     val navTabs = listOf(
         stringResource(R.string.tab_home),
-        stringResource(R.string.tab_movies),
-        stringResource(R.string.tab_shows),
-        stringResource(R.string.tab_live_tv),
+        stringResource(R.string.tab_search),
         stringResource(R.string.tab_my_list)
     )
 

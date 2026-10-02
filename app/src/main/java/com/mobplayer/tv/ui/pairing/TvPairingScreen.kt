@@ -10,8 +10,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Tv
-import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -20,6 +18,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -30,6 +30,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mobplayer.tv.R
 import com.mobplayer.tv.ui.theme.TvColors
+import com.mobplayer.tv.ui.icons.Tv
+import com.mobplayer.tv.ui.icons.Wifi
 
 @Composable
 fun TvPairingScreen(
@@ -52,19 +54,9 @@ fun TvPairingScreen(
         label = "pulseScale"
     )
 
+    // Transparent: shown inside TvModalOverlay, so the running screen stays visible around the card
     Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(
-                        TvColors.BackgroundRadialCenter,
-                        TvColors.BackgroundDark,
-                        TvColors.BackgroundRadialEdge
-                    ),
-                    radius = 1200f
-                )
-            ),
+        modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -73,7 +65,7 @@ fun TvPairingScreen(
             modifier = Modifier
                 .width(620.dp)
                 .clip(RoundedCornerShape(24.dp))
-                .background(TvColors.SurfaceDark.copy(alpha = 0.92f))
+                .background(TvColors.SurfaceDark.copy(alpha = 0.78f))
                 .border(1.5.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(24.dp))
                 .shadow(24.dp, RoundedCornerShape(24.dp))
                 .padding(horizontal = 36.dp, vertical = 24.dp)
@@ -196,6 +188,9 @@ fun TvPairingScreen(
 
             // Demo Mode / Preview Button
             var isDemoFocused by remember { mutableStateOf(false) }
+            // Only focusable element: take focus so OK works without a D-pad press first
+            val demoFocus = remember { FocusRequester() }
+            LaunchedEffect(Unit) { runCatching { demoFocus.requestFocus() } }
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -209,6 +204,7 @@ fun TvPairingScreen(
                         color = if (isDemoFocused) Color.White else Color.White.copy(alpha = 0.2f),
                         shape = RoundedCornerShape(12.dp)
                     )
+                    .focusRequester(demoFocus)
                     .onFocusChanged { isDemoFocused = it.isFocused }
                     .focusable()
                     .clickable { onEnterDemoMode() }

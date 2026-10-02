@@ -9,19 +9,22 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class AuthManager @Inject constructor(@ApplicationContext context: Context) {
+class AuthManager @Inject constructor(@ApplicationContext private val context: Context) {
 
-    private val masterKey = MasterKey.Builder(context)
-        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-        .build()
-
-    private val sharedPreferences = EncryptedSharedPreferences.create(
-        context,
-        "auth_prefs",
-        masterKey,
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-    )
+    // Lazy: Keystore setup takes ~2s on low-end TVs. AuthManager is injected on the main thread
+    // (service onCreate), but prefs are only touched from Ktor handlers, off the main thread.
+    private val sharedPreferences by lazy {
+        val masterKey = MasterKey.Builder(context)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+        EncryptedSharedPreferences.create(
+            context,
+            "auth_prefs",
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+    }
 
     fun generatePin(): String {
         return (1000..9999).random().toString()

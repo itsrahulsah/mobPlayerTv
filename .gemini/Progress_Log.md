@@ -67,3 +67,16 @@
 - **Task 8.6:** Added `network_security_config.xml` and `android:usesCleartextTraffic="true"` to permit cleartext HTTP traffic for local network and loopback streaming.
 - **Task 8.7:** Added client-side in-browser MP4 fast-start `moov` atom relocation (`ensureFastStart()`) in `test_client.html` with chunk offset patching (`stco`/`co64`) and direct binary XHR streaming.
 
+
+---
+
+## Phase 9: YouTube Integration, Remote Keyboard & Playback Fixes
+**Status: IN PROGRESS** (branch `youtbe-implementation`, uncommitted as of 2026-10-02)
+- **Task 9.1:** YouTube home feed, category bar, Search tab and recent searches (`youtubecrawler` module, `YouTubeRepository`, `YouTubeFeedViewModel`, `YouTubeSearchViewModel`, `TvYouTubeCategoryBar`, `TvYouTubeSearchBar`).
+- **Task 9.2:** YouTube playback via vendored SmartTube MediaServiceCore AARs in `app/libs/` (~36 MB, un-ignored with `!app/libs/*.aar`). `SmartTubePlayerEngine` resolves DASH MPD / HLS / DASH URL / progressive sources; `TvYouTubePlayerScreen` + `YouTubePlayerViewModel` play them on the shared `MediaRepository` ExoPlayer so the phone remote keeps working.
+- **Task 9.3:** Remote keyboard: `TEXT_INPUT` / `TEXT_SUBMIT` WebSocket messages mirror phone text into the TV's YouTube search field (documented in `APP_CONTROL_CONTRACT.md` §6.3, added to `test_client.html`).
+- **Task 9.4:** `ServerRepository.isUiNavigating` lets remote D-pad/OK/Back navigate UI over playing media instead of always seeking / toggling / closing the player.
+- **Task 9.5:** `AuthManager` creates `EncryptedSharedPreferences` lazily (Keystore setup took ~2 s on the main thread on low-end TVs).
+- **Task 9.6:** Replaced `material-icons-extended` with a small local icon set (`ui/icons/ExtendedIcons.kt`); removed `MockMediaRepository` and the Movies / Shows / Live TV tabs.
+- **Task 9.7 (fix):** `SocketTimeoutException` when streaming a large (~600 MB) MKV during upload. See "Upload Streaming: MKV Timeout Fix" in `project_context.md`.
+- **Task 9.8 (fix):** TV display slept during playback. `MainActivity` now sets `FLAG_KEEP_SCREEN_ON` while a video is playing.

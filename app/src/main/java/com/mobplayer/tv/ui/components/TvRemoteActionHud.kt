@@ -31,6 +31,15 @@ import com.mobplayer.tv.models.RemoteIconType
 import com.mobplayer.tv.ui.theme.TvColors
 import com.mobplayer.tv.viewmodel.TvMainViewModel
 import androidx.compose.animation.core.tween
+import com.mobplayer.tv.ui.icons.ArrowDownward
+import com.mobplayer.tv.ui.icons.ArrowUpward
+import com.mobplayer.tv.ui.icons.FastForward
+import com.mobplayer.tv.ui.icons.FastRewind
+import com.mobplayer.tv.ui.icons.Movie
+import com.mobplayer.tv.ui.icons.Pause
+import com.mobplayer.tv.ui.icons.VolumeDown
+import com.mobplayer.tv.ui.icons.VolumeOff
+import com.mobplayer.tv.ui.icons.VolumeUp
 
 @Composable
 fun TvRemoteActionHud(
