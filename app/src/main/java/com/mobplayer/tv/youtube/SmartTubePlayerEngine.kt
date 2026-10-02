@@ -22,6 +22,7 @@ import com.liskovsoft.youtubeapi.service.YouTubeServiceManager
 import com.liskovsoft.youtubeapi.service.data.YouTubeMediaItemFormatInfo
 import com.liskovsoft.youtubeapi.videoinfo.V2.VideoInfoService
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayInputStream
 
@@ -70,11 +71,16 @@ object SmartTubePlayerEngine {
             Log.w(TAG, "Strategy 1 (VideoInfoService) error: ${e.message}", e)
         }
 
+        ensureActive()
+
         // Strategy 2: Use YouTubeServiceManager with client rotation
         val service = YouTubeServiceManager.instance()
         val mediaItemService = service.mediaItemService
 
         for (attempt in 0..5) {
+            // The calls below block and ignore cancellation; stop between them so an abandoned lookup
+            // doesn't keep rotating the shared client under a newer video's lookup.
+            ensureActive()
             try {
                 Log.d(TAG, "Strategy 2: MediaItemService attempt $attempt...")
                 val formatInfo = mediaItemService.getFormatInfo(videoId)
@@ -90,6 +96,7 @@ object SmartTubePlayerEngine {
                 Log.w(TAG, "Strategy 2 (MediaItemService) attempt $attempt failed: ${e.message}")
             }
             Log.d(TAG, "Attempt $attempt produced no playable formats, rotating client...")
+            ensureActive()
             service.switchNextClientNow()
         }
 

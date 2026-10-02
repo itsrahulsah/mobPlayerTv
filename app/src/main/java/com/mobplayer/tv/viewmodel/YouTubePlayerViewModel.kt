@@ -12,12 +12,14 @@ import com.mobplayer.tv.youtube.PlaybackSource
 import com.mobplayer.tv.youtube.SmartTubePlayerEngine
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 data class YouTubePlayerUiState(
@@ -98,7 +100,10 @@ class YouTubePlayerViewModel @Inject constructor(
         resolveJob = viewModelScope.launch {
             try {
                 val source = youTubeRepository.resolvePlaybackSource(videoId)
-                val mediaSource = SmartTubePlayerEngine.buildMediaSource(source, httpDataSourceFactory)
+                // Parsing a long video's DASH manifest can take a while; keep it off the main thread.
+                val mediaSource = withContext(Dispatchers.Default) {
+                    SmartTubePlayerEngine.buildMediaSource(source, httpDataSourceFactory)
+                }
                 if (mediaSource == null) {
                     fail((source as? PlaybackSource.Error)?.message ?: "No playable stream found")
                     return@launch

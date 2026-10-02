@@ -296,7 +296,8 @@ class MainActivity : ComponentActivity() {
                         }
 
                         when (val event = connectionEvent) {
-                            is ConnectionEvent.PinRequested -> TvModalOverlay {
+                            // Back leaves the app, as it did before the overlay, for users who don't want to pair.
+                            is ConnectionEvent.PinRequested -> TvModalOverlay(onBack = { finish() }) {
                                 TvPairingScreen(
                                     pin = event.pin,
                                     serverIp = event.serverIp,
