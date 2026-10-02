@@ -117,15 +117,23 @@ class MainActivity : ComponentActivity() {
             // Player hidden behind the browse screens while its media keeps playing (e.g. searching
             // mid-video); Back or starting other media brings it back up.
             var isPlayerMinimized by rememberSaveable { mutableStateOf(false) }
-            LaunchedEffect(isPlayerActive, activeMediaTitle) {
+            // Saved alongside isPlayerMinimized so a configuration change (which re-runs effects)
+            // isn't mistaken for a player change and doesn't undo a restored minimise.
+            val playerKey = "$isPlayerActive|$activeMediaTitle"
+            var lastPlayerKey by rememberSaveable { mutableStateOf(playerKey) }
+            LaunchedEffect(playerKey) {
                 // Closed elsewhere, or new media opened (e.g. cast from the phone): show the player again
-                isPlayerMinimized = false
+                if (playerKey != lastPlayerKey) {
+                    lastPlayerKey = playerKey
+                    isPlayerMinimized = false
+                }
             }
             // While browsing UI over a playing video, remote Left/Right/OK/Back navigate instead of
             // seeking / toggling playback / closing the player.
             var isYouTubeSuggestionsOpen by remember { mutableStateOf(false) }
-            LaunchedEffect(isPlayerMinimized, isYouTubeSuggestionsOpen) {
-                viewModel.serverRepository.setUiNavigating(isPlayerMinimized || isYouTubeSuggestionsOpen)
+            var isYouTubeErrorShowing by remember { mutableStateOf(false) }
+            LaunchedEffect(isPlayerMinimized, isYouTubeSuggestionsOpen, isYouTubeErrorShowing) {
+                viewModel.serverRepository.setUiNavigating(isPlayerMinimized || isYouTubeSuggestionsOpen || isYouTubeErrorShowing)
             }
             LaunchedEffect(Unit) {
                 viewModel.serverRepository.remoteTextInput.collect { input ->
@@ -195,7 +203,8 @@ class MainActivity : ComponentActivity() {
                                     onRetry = youTubePlayerViewModel::retry,
                                     onBack = youTubePlayerViewModel::close,
                                     onPlaySuggestion = youTubePlayerViewModel::play,
-                                    onSuggestionsVisibleChange = { isYouTubeSuggestionsOpen = it }
+                                    onSuggestionsVisibleChange = { isYouTubeSuggestionsOpen = it },
+                                    onErrorVisibleChange = { isYouTubeErrorShowing = it }
                                 )
                             } else if (playerOpen) {
                                 // Fullscreen TV Video Player View

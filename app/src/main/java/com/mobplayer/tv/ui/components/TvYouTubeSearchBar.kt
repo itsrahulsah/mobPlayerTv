@@ -179,7 +179,7 @@ fun TvYouTubeSearchBar(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                items(recentSearches, key = { it }) { recent ->
+                items(recentSearches, key = { "recent_$it" }) { recent ->
                     TvNavTab(title = recent, isSelected = false, onClick = { onSubmit(recent) })
                 }
                 item(key = "clear_recents") {

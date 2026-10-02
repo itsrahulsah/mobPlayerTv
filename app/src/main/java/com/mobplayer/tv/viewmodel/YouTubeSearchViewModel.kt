@@ -46,7 +46,11 @@ class YouTubeSearchViewModel @Inject constructor(
         val trimmed = query.trim()
         searchJob?.cancel()
         if (trimmed.length < MIN_QUERY_LENGTH) {
-            if (trimmed.isEmpty()) _uiState.update { it.copy(searchedQuery = null, rails = emptyList(), isLoading = false, error = null) }
+            // The cancelled search can't clear its own spinner, so reset it here.
+            _uiState.update {
+                if (trimmed.isEmpty()) it.copy(searchedQuery = null, rails = emptyList(), isLoading = false, error = null)
+                else it.copy(isLoading = false)
+            }
             return
         }
         searchJob = viewModelScope.launch {

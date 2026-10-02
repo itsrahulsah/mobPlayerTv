@@ -81,6 +81,8 @@ fun TvYouTubePlayerScreen(
     onPlaySuggestion: (MediaItemModel) -> Unit,
     /** Tells the host when the suggestions row opens/closes so remote Left/Right browse it instead of seeking. */
     onSuggestionsVisibleChange: (Boolean) -> Unit = {},
+    /** Tells the host when the error panel shows so remote Left/Right/OK move between its buttons. */
+    onErrorVisibleChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val item = state.item ?: return
@@ -88,6 +90,9 @@ fun TvYouTubePlayerScreen(
     val isBuffering = playerStatus.isBuffering
     // A stale player error is irrelevant while a retry is re-resolving the stream.
     val error = state.error ?: playerStatus.error.takeUnless { state.isResolving }
+    val currentOnErrorVisibleChange by rememberUpdatedState(onErrorVisibleChange)
+    LaunchedEffect(error != null) { currentOnErrorVisibleChange(error != null) }
+    DisposableEffect(Unit) { onDispose { currentOnErrorVisibleChange(false) } }
     val isPlaying = playerState?.isPlaying == true
     val position = playerState?.positionMs ?: 0L
     val duration = playerState?.durationMs ?: 0L

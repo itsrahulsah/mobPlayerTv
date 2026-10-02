@@ -57,8 +57,12 @@ class YouTubePlayerViewModel @Inject constructor(
         viewModelScope.launch {
             mediaRepository.currentMediaId.collect { mediaId ->
                 val state = _uiState.value
-                val videoId = state.item?.youtubeVideoId
-                if (videoId != null && !state.isResolving && state.error == null && mediaId != videoId) dismiss()
+                val videoId = state.item?.youtubeVideoId ?: return@collect
+                if (mediaId == videoId) return@collect
+                // While resolving or on the error screen nothing of ours is loaded (play() stopped the
+                // player), so only a newly loaded media id counts; once playing, a stop counts too.
+                val ownsPlayer = !state.isResolving && state.error == null
+                if (mediaId != null || ownsPlayer) dismiss()
             }
         }
     }
