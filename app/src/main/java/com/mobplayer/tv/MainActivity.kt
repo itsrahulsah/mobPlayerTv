@@ -306,8 +306,19 @@ class MainActivity : ComponentActivity() {
                         }
 
                         when (val event = connectionEvent) {
-                            // Back leaves the app, as it did before the overlay, for users who don't want to pair.
-                            is ConnectionEvent.PinRequested -> TvModalOverlay(onBack = { finish() }) {
+                            // A disconnect can bring this up over a playing video, which the dialog blocks the
+                            // remote from reaching: Back first closes that player (as on master), and only
+                            // leaves the app when nothing is playing.
+                            is ConnectionEvent.PinRequested -> TvModalOverlay(onBack = {
+                                when {
+                                    !isPlayerActive -> finish()
+                                    youTubePlayerState.item != null -> youTubePlayerViewModel.close()
+                                    else -> {
+                                        viewModel.serverRepository.closePlayer()
+                                        viewModel.mediaRepository.stop()
+                                    }
+                                }
+                            }) {
                                 TvPairingScreen(
                                     pin = event.pin,
                                     serverIp = event.serverIp,
