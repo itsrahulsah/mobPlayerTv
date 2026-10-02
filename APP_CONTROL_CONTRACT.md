@@ -245,7 +245,22 @@ Controllers may map common directional or physical remote buttons directly to th
 }
 ```
 
-### 6.3. Command Execution Success (`COMMAND_SUCCESS`)
+### 6.3. Remote Keyboard (`TEXT_INPUT` / `TEXT_SUBMIT`)
+
+- **Direction**: Client -> Server
+- **Payload**: The **full** current text of the client's input field (not a single keystroke), sent untrimmed so typed spaces are kept.
+- **Behavior**: The TV opens the **Search** tab (closing the player if one is open) and mirrors the text into the YouTube search field.
+  - `TEXT_INPUT`: send on every edit. The TV searches automatically ~0.8 s after typing pauses.
+  - `TEXT_SUBMIT`: send on Enter/Search. The TV searches immediately and saves the query to recent searches.
+
+```json
+{
+  "type": "TEXT_INPUT",
+  "payload": "arijit singh"
+}
+```
+
+### 6.4. Command Execution Success (`COMMAND_SUCCESS`)
 
 - **Direction**: Server -> Client
 - **Payload**: Action name that was successfully executed (`"PLAY"`, `"PAUSE"`, `"SEEK"`, `"SET_VOLUME"`, `"LOAD_MEDIA"`).
@@ -306,6 +321,8 @@ The TV server continuously broadcasts playback status updates to the connected a
 | `AUTH_FAILED` | TV -> Client | `"Invalid PIN"` or `"Connection rejected by TV"` | Auth failed or denied; connection closed |
 | `COMMAND` | Client -> TV | `{"action":"PLAY\|PAUSE\|PLAY_PAUSE\|SEEK\|SET_VOLUME", "seekToMs": Long?, "volume": Float?}` | Control playback or volume actions |
 | `LOAD_MEDIA` | Client -> TV | Video URL string | Load and auto-play new media item |
+| `TEXT_INPUT` | Client -> TV | Full field text | Mirror text into the TV's YouTube search field |
+| `TEXT_SUBMIT` | Client -> TV | Full field text | Run the YouTube search on the TV now |
 | `COMMAND_SUCCESS` | TV -> Client | Action string | Acknowledgment of executed command |
 | `STATE_UPDATE` | TV -> Client | `{"isPlaying": Boolean, "positionMs": Long, "durationMs": Long, "volume": Float}` | Real-time state broadcast from ExoPlayer |
 

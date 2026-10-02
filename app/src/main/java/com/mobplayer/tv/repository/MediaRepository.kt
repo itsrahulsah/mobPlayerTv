@@ -29,6 +29,14 @@ class MediaRepository @Inject constructor(
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     var activePlayingVideoId: String? = null
+        private set(value) {
+            field = value
+            _currentMediaId.value = value
+        }
+
+    /** Id of the media currently loaded (null when stopped); lets screens detect a takeover. */
+    private val _currentMediaId = MutableStateFlow<String?>(null)
+    val currentMediaId: StateFlow<String?> = _currentMediaId
     var onPlaybackProgressUpdate: ((videoId: String, positionMs: Long, durationMs: Long) -> Unit)? = null
     var onPlaybackError: ((error: androidx.media3.common.PlaybackException) -> Unit)? = null
 
@@ -121,13 +129,7 @@ class MediaRepository @Inject constructor(
     }
 
     fun play() {
-        if (player?.currentMediaItem == null) {
-            // Load a demo video if nothing is currently playing
-            val demoUrl = "https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
-            loadMedia(demoUrl)
-        } else {
-            player?.play()
-        }
+        player?.play()
     }
 
     fun pause() {
@@ -170,11 +172,47 @@ class MediaRepository @Inject constructor(
             builder.setMimeType(resolvedMime)
         }
         val mediaItem = builder.build()
-        player?.setMediaItem(mediaItem)
+        if (isGrowingUploadStream(url)) {
+            player?.setMediaSource(buildGrowingUploadSource(mediaItem))
+        } else {
+            player?.setMediaItem(mediaItem)
+        }
         player?.prepare()
         if (startPositionMs > 0L) {
             player?.seekTo(startPositionMs)
         }
+        player?.play()
+    }
+
+    private fun isGrowingUploadStream(url: String): Boolean =
+        url.startsWith("http://127.0.0.1:") && url.contains("/api/stream/")
+
+    /**
+     * Source for a file that is still being uploaded. The server holds the connection open until
+     * the requested bytes arrive, so reads can stall far longer than ExoPlayer's 8s default.
+     * Matroska seek-for-cues is disabled because Cues usually sit at the end of the file, which
+     * would block startup until the whole upload finished (the stream is unseekable as a result).
+     */
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    private fun buildGrowingUploadSource(mediaItem: MediaItem): androidx.media3.exoplayer.source.MediaSource {
+        val httpFactory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
+            .setConnectTimeoutMs(10_000)
+            .setReadTimeoutMs(60_000)
+        val extractors = androidx.media3.extractor.DefaultExtractorsFactory()
+            .setMatroskaExtractorFlags(androidx.media3.extractor.mkv.MatroskaExtractor.FLAG_DISABLE_SEEK_FOR_CUES)
+        return androidx.media3.exoplayer.source.ProgressiveMediaSource.Factory(httpFactory, extractors)
+            .setLoadErrorHandlingPolicy(
+                androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy(/* minimumLoadableRetryCount = */ 30)
+            )
+            .createMediaSource(mediaItem)
+    }
+
+    /** Plays a pre-built source (e.g. a YouTube DASH manifest that needs custom headers). */
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    fun loadMediaSource(mediaSource: androidx.media3.exoplayer.source.MediaSource, videoId: String) {
+        activePlayingVideoId = videoId
+        player?.setMediaSource(mediaSource)
+        player?.prepare()
         player?.play()
     }
 

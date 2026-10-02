@@ -26,7 +26,9 @@ data class MediaItemModel(
     val gradientColors: List<Long> = listOf(0xFF1E293B, 0xFF0F172A),
     val isLive: Boolean = false,
     val channelNumber: String? = null,
-    val rankNumber: Int? = null
+    val rankNumber: Int? = null,
+    /** Set for YouTube items; the stream URL is resolved on demand since it expires. */
+    val youtubeVideoId: String? = null
 )
 
 data class MediaRailModel(

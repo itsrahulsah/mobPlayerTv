@@ -3,7 +3,6 @@ package com.mobplayer.tv.ui.components
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -14,6 +13,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mobplayer.tv.data.models.MediaItemModel
 import com.mobplayer.tv.data.models.MediaRailModel
+import com.mobplayer.tv.ui.focus.LocalBrowseFocus
+import com.mobplayer.tv.ui.focus.restoreFocus
 import com.mobplayer.tv.ui.theme.TvColors
 
 @Composable
@@ -22,15 +23,17 @@ fun TvContentRail(
     onItemClick: (MediaItemModel) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val listState = rememberLazyListState()
+    // Hoisted so the row keeps its scroll while the player is showing
+    val browseFocus = LocalBrowseFocus.current
+    val listState = browseFocus.rowState(rail.id)
 
     Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 12.dp)
     ) {
-        // Rail Header
-        Row(
+        // Rail Header (omitted for untitled continuation rows, e.g. wrapped grid rows)
+        if (rail.title.isNotEmpty()) Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 48.dp, vertical = 6.dp),
@@ -55,7 +58,7 @@ fun TvContentRail(
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        if (rail.title.isNotEmpty()) Spacer(modifier = Modifier.height(8.dp))
 
         // Horizontal Carousel
         LazyRow(
@@ -68,10 +71,15 @@ fun TvContentRail(
                 items = rail.items,
                 key = { it.id }
             ) { item ->
+                val focusKey = "${rail.id}/${item.id}"
                 TvMediaCard(
                     item = item,
                     cardType = rail.cardType,
-                    onClick = onItemClick
+                    onClick = {
+                        browseFocus.onItemClicked(focusKey)
+                        onItemClick(it)
+                    },
+                    modifier = Modifier.restoreFocus(focusKey)
                 )
             }
         }

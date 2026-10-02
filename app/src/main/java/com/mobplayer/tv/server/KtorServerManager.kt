@@ -586,6 +586,18 @@ class KtorServerManager @Inject constructor(
                 handleKeyEvent(payloadStr, session)
             }
 
+            // Remote keyboard: payload is the full field text (untrimmed so typed spaces survive)
+            "TEXT_INPUT", "TEXT_SUBMIT" -> {
+                val submit = type == "TEXT_SUBMIT"
+                serverRepository.postRemoteText(message.payload, submit)
+                if (submit) {
+                    serverRepository.postRemoteAction(
+                        RemoteActionEvent("SEARCH", "🔍 Searching", message.payload.trim(), RemoteIconType.INFO)
+                    )
+                }
+                Log.i("RemoteEvent", "⌨️ [Action Complete] $type: '${message.payload}'")
+            }
+
             // Direct action types (e.g. {"type":"PLAY","payload":""})
             "PLAY", "PAUSE", "TOGGLE_PLAY_PAUSE", "PLAY_PAUSE", "STOP", "SEEK",
             "SEEK_FORWARD", "SEEK_BACKWARD", "FAST_FORWARD", "REWIND",
@@ -751,7 +763,7 @@ class KtorServerManager @Inject constructor(
                 }
 
                 "DPAD_LEFT", "LEFT" -> {
-                    if (serverRepository.isPlayerActive.value) {
+                    if (playerHandlesKeys()) {
                         val currentPos = mediaRepository.player?.currentPosition ?: 0L
                         val newPos = (currentPos - 10_000L).coerceAtLeast(0L)
                         mediaRepository.seekTo(newPos)
@@ -765,7 +777,7 @@ class KtorServerManager @Inject constructor(
                 }
 
                 "DPAD_RIGHT", "RIGHT" -> {
-                    if (serverRepository.isPlayerActive.value) {
+                    if (playerHandlesKeys()) {
                         val currentPos = mediaRepository.player?.currentPosition ?: 0L
                         val newPos = currentPos + 10_000L
                         mediaRepository.seekTo(newPos)
@@ -779,7 +791,7 @@ class KtorServerManager @Inject constructor(
                 }
 
                 "DPAD_CENTER", "SELECT", "ENTER", "OK" -> {
-                    if (serverRepository.isPlayerActive.value) {
+                    if (playerHandlesKeys()) {
                         val isPlaying = mediaRepository.player?.isPlaying == true
                         if (isPlaying) {
                             mediaRepository.pause()
@@ -799,7 +811,7 @@ class KtorServerManager @Inject constructor(
                 }
 
                 "BACK" -> {
-                    if (serverRepository.isPlayerActive.value) {
+                    if (playerHandlesKeys()) {
                         mediaRepository.stop()
                         serverRepository.closePlayer()
                         serverRepository.postRemoteAction(
@@ -893,6 +905,10 @@ class KtorServerManager @Inject constructor(
             Log.w("RemoteEvent", "⚠️ Unknown key event code for payload: '$payload'")
         }
     }
+
+    /** Left/Right/OK/Back drive playback directly, unless the user is navigating UI over the video. */
+    private fun playerHandlesKeys(): Boolean =
+        serverRepository.isPlayerActive.value && !serverRepository.isUiNavigating.value
 
     private fun formatTime(ms: Long): String {
         val sec = (ms / 1000) % 60

@@ -57,6 +57,25 @@ tasks.named("preBuild") {
 }
 
 dependencies {
+    // YouTube crawler (feeds + stream extraction)
+    implementation(project(":youtubecrawler"))
+
+    // SmartTube MediaServiceCore AARs (YouTube stream deciphering + PO tokens) & their dependencies
+    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar", "*.jar"))))
+    implementation("androidx.appcompat:appcompat:1.6.1")
+    implementation("androidx.preference:preference-ktx:1.2.1")
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+    implementation("com.jayway.jsonpath:json-path:2.9.0")
+    implementation("com.github.florianingerl.util:regex:1.1.1")
+    implementation("io.reactivex.rxjava2:rxjava:2.2.21")
+    implementation("io.reactivex.rxjava2:rxandroid:2.1.1")
+    implementation("com.grack:nanojson:1.7")
+    implementation("androidx.webkit:webkit:1.10.0")
+    implementation("dnsjava:dnsjava:2.1.9")
+    implementation("com.jakewharton:disklrucache:2.0.2")
+    implementation("info.guardianproject.netcipher:netcipher:2.1.0")
+
     // Core & Architecture
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")
@@ -67,7 +86,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics:1.6.2")
     implementation("androidx.compose.ui:ui-tooling-preview:1.6.2")
     implementation("androidx.compose.material3:material3:1.2.1")
-    implementation("androidx.compose.material:material-icons-extended:1.6.2")
+    implementation("androidx.compose.material:material-icons-core:1.6.2")
     implementation("androidx.tv:tv-foundation:1.0.0-alpha10")
     implementation("androidx.tv:tv-material:1.0.0-alpha10")
     implementation("androidx.activity:activity-compose:1.8.2")

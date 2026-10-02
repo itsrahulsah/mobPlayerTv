@@ -639,6 +639,15 @@
                             <button class="action-btn" onclick="sendAction('VOLUME_UP')"><i class="fa-solid fa-volume-high"></i> Vol +</button>
                         </div>
                     </div>
+
+                    <!-- Remote keyboard: mirrors this field into the TV's YouTube search -->
+                    <div class="form-group" style="width: 100%; margin-top: 20px;">
+                        <label for="remoteText">Type on TV (YouTube search)</label>
+                        <div class="input-action">
+                            <input type="text" id="remoteText" placeholder="Search YouTube…" autocomplete="off" enterkeyhint="search" />
+                            <button class="primary" onclick="sendRemoteText(true)" title="Search on TV" aria-label="Search on TV"><i class="fa-solid fa-magnifying-glass"></i> Search</button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- 5. Videos Stored on TV Library Card -->
@@ -874,6 +883,15 @@
             });
             ws.send(msg);
             log(`--&gt; Load Media: ${url}`, "#8b5cf6");
+        }
+
+        // Sends the whole field (not keystrokes) so the TV text always matches; submit runs the search now.
+        function sendRemoteText(submit) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return log("Not connected to TV.", "var(--danger)");
+            const text = document.getElementById('remoteText').value;
+            if (submit && !text.trim()) return log("Type something to search.", "var(--danger)");
+            ws.send(JSON.stringify({ type: submit ? "TEXT_SUBMIT" : "TEXT_INPUT", payload: text }));
+            if (submit) log(`--&gt; Search on TV: <b>${escapeHtml(text.trim())}</b>`, "var(--primary)");
         }
 
         // ==========================================
@@ -1335,6 +1353,17 @@
                 if (e.key === 'Enter') {
                     e.preventDefault();
                     sendPinSubmit();
+                }
+            });
+        }
+
+        const remoteTextEl = document.getElementById('remoteText');
+        if (remoteTextEl) {
+            remoteTextEl.addEventListener('input', () => sendRemoteText(false));
+            remoteTextEl.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    sendRemoteText(true);
                 }
             });
         }
