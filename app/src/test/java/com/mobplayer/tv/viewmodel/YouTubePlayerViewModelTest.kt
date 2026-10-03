@@ -473,4 +473,36 @@ class YouTubePlayerViewModelTest {
         advanceUntilIdle()
         assertEquals(listOf("def"), watchHistoryStore.history.value.map { it.youtubeVideoId })
     }
+
+    @Test
+    fun `isOwnTitle matches only the video the screen is showing`() = runTest {
+        advanceUntilIdle()
+        assertFalse(viewModel.isOwnTitle("Video abc"))
+
+        viewModel.play(youTubeItem("abc"))
+        awaitResolved()
+        assertTrue(viewModel.isOwnTitle("Video abc"))
+        assertFalse(viewModel.isOwnTitle("Phone cast"))
+
+        viewModel.close()
+        advanceUntilIdle()
+        assertFalse(viewModel.isOwnTitle("Video abc"))
+    }
+
+    @Test
+    fun `autoplay opens the player under a title the screen owns`() = runTest {
+        advanceUntilIdle()
+        viewModel.play(youTubeItem("abc"))
+        awaitResolved()
+
+        playbackEnded.emit("abc")
+        advanceUntilIdle()
+        awaitResolved()
+
+        // MainActivity keeps a minimised player minimised for exactly this title change.
+        assertEquals("Video next1", serverRepository.activeMediaTitle.value)
+        assertTrue(viewModel.isOwnTitle(serverRepository.activeMediaTitle.value))
+        assertTrue(viewModel.isOwnLoad(loadCount.value))
+        assertFalse(viewModel.isOwnTitle("Video abc"))
+    }
 }

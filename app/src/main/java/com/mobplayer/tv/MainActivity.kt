@@ -46,6 +46,7 @@ import com.mobplayer.tv.models.RemoteActionEvent
 import com.mobplayer.tv.models.RemoteIconType
 import com.mobplayer.tv.server.KtorServerManager
 import com.mobplayer.tv.service.WebSocketServerService
+import com.mobplayer.tv.ui.PlayerSnapshot
 import com.mobplayer.tv.ui.components.TvModalOverlay
 import com.mobplayer.tv.ui.components.TvRemoteActionHud
 import com.mobplayer.tv.ui.components.TvStartupLoaderOverlay
@@ -59,6 +60,7 @@ import com.mobplayer.tv.viewmodel.YouTubeSearchViewModel
 import com.mobplayer.tv.ui.youtube.TvYouTubePlayerScreen
 import com.mobplayer.tv.ui.pairing.TvPairingScreen
 import com.mobplayer.tv.ui.theme.TvColors
+import com.mobplayer.tv.ui.shouldRestoreMinimizedPlayer
 import androidx.activity.viewModels
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import kotlinx.coroutines.delay
@@ -135,18 +137,24 @@ class MainActivity : ComponentActivity() {
             var isPlayerMinimized by rememberSaveable { mutableStateOf(false) }
             // Saved alongside isPlayerMinimized so a configuration change (which re-runs effects)
             // isn't mistaken for a player change and doesn't undo a restored minimise.
-            val playerKey = "$isPlayerActive|$activeMediaTitle"
-            var lastPlayerKey by rememberSaveable { mutableStateOf(playerKey) }
             // loadCount catches a new video that reuses the title (untitled casts, restarting an upload).
             val loadCount by viewModel.mediaRepository.loadCount.collectAsState()
+            var lastPlayerActive by rememberSaveable { mutableStateOf(isPlayerActive) }
+            var lastMediaTitle by rememberSaveable { mutableStateOf(activeMediaTitle) }
             var lastLoadCount by rememberSaveable { mutableLongStateOf(loadCount) }
-            LaunchedEffect(playerKey, loadCount) {
-                // The open YouTube video's stream finishing its resolve isn't new media; leave it
-                // minimised so it doesn't cover a search being typed.
-                val isNewLoad = loadCount != lastLoadCount && !youTubePlayerViewModel.isOwnLoad(loadCount)
-                // Closed elsewhere, or new media opened (e.g. cast from the phone): show the player again
-                if (playerKey != lastPlayerKey || isNewLoad) isPlayerMinimized = false
-                lastPlayerKey = playerKey
+            LaunchedEffect(isPlayerActive, activeMediaTitle, loadCount) {
+                // Closed elsewhere, or new media opened (e.g. cast from the phone): show the player
+                // again. The YouTube screen's own stream resolving, or autoplay moving it to the next
+                // video, isn't new media; leave it minimised so it doesn't cover a search being typed.
+                val restore = shouldRestoreMinimizedPlayer(
+                    previous = PlayerSnapshot(lastPlayerActive, lastMediaTitle, lastLoadCount),
+                    current = PlayerSnapshot(isPlayerActive, activeMediaTitle, loadCount),
+                    isYouTubeScreenLoad = youTubePlayerViewModel.isOwnLoad(loadCount),
+                    isYouTubeScreenTitle = youTubePlayerViewModel.isOwnTitle(activeMediaTitle)
+                )
+                if (restore) isPlayerMinimized = false
+                lastPlayerActive = isPlayerActive
+                lastMediaTitle = activeMediaTitle
                 lastLoadCount = loadCount
             }
             // While browsing UI over a playing video, remote Left/Right/OK/Back navigate instead of
