@@ -147,7 +147,7 @@ MobPlayerTv/
 │       ├── viewmodel/        # ViewModels
 │       └── ui/               # Compose screens & components
 ├── youtubecrawler/           # YouTube feed/search/stream extraction library
-├── docs/images/              # README banner & screenshots
+├── docs/images/              # Logo, icon sheet, banner & screenshots
 ├── api_contracts/            # Per-endpoint API specifications
 ├── APP_CONTROL_CONTRACT.md   # Full controller protocol spec
 ├── test_client.html          # Web controller (bundled into the APK)
@@ -232,7 +232,8 @@ MobPlayer TV is built for a **trusted home LAN**. Keep these limits in mind:
 
 - **One controller at a time.** A second device must be allowed on the TV, which disconnects the first.
 - **No mDNS through the emulator relay.** When you use `forward-tv-port`, enter the address manually.
-- **Seeking in growing MKV uploads.** An MKV played while it uploads can't be seeked until it's replayed from storage. MP4s with the `moov` atom at the end wait for most of the upload before playing.
+- **Seeking in growing MKV uploads.** An MKV played while it uploads can't be seeked until it's replayed from storage.
+- **MP4s with `moov` at the end.** This is ExoPlayer behaviour rather than app code: ExoPlayer needs the `moov` index before it can play, so these files don't start until most of the upload has arrived. The web controller moves `moov` to the front before uploading to avoid this.
 - **Device decoder limits.** Uploaded or cast files beyond the TV's decoder capabilities (for example, some 4K H.264 High@5.1 files) may start and then fail mid-playback.
 
 ---
@@ -263,10 +264,19 @@ MobPlayer TV is built for a **trusted home LAN**. Keep these limits in mind:
 ./gradlew connectedAndroidTest  # Instrumentation tests (device/emulator)
 ```
 
-Coverage is currently small:
+There are 39 tests in 7 classes:
 
-- **Unit:** `ServerRepositoryTest` and `VideoUploadManagerTest` in `app`, and `FormatUtilsTest` in `youtubecrawler`.
-- **Instrumentation:** `AuthManagerTest`.
+| Module | Type | Test class | Tests |
+| :--- | :--- | :--- | :---: |
+| `app` | Unit | `ServerRepositoryTest` | 12 |
+| `app` | Unit | `VideoUploadManagerTest` | 8 |
+| `app` | Instrumentation | `AuthManagerTest` | 4 |
+| `youtubecrawler` | Unit | `FormatUtilsTest` | 4 |
+| `youtubecrawler` | Unit | `UtilsTest` | 4 |
+| `youtubecrawler` | Unit | `YouTubeDataTest` | 3 |
+| `youtubecrawler` | Unit | `YouTubeModelsTest` | 4 |
+
+UI, ViewModels, the Ktor routes and `MediaRepository` don't have tests yet.
 
 ---
 
@@ -281,5 +291,7 @@ The app bundles prebuilt third-party libraries in `app/libs/`. They keep their o
 | [MediaServiceCore](https://github.com/yuliskov/MediaServiceCore) by yuliskov (from the [SmartTube](https://github.com/yuliskov/SmartTube) project) | `youtubeapi`, `mediaserviceinterfaces`, `sharedutils` AARs | No license declared in its repository; [SmartTube](https://github.com/yuliskov/SmartTube) itself is MIT |
 | [J2V8](https://github.com/eclipsesource/J2V8) | `j2v8-release.aar` | Eclipse Public License 1.0 |
 | [Apache Commons IO](https://commons.apache.org/proper/commons-io/) | `commons-io-2.8.0-release.aar` | Apache License 2.0 |
+
+> **Note:** MediaServiceCore's repository declares no license, which by default means all rights are reserved. Permission to redistribute these AARs hasn't been confirmed. Resolve this, either by getting the author's permission or by pulling the libraries in as a dependency instead of committing the binaries, before you publish builds.
 
 Thanks to the SmartTube project for its YouTube stream-deciphering work.
