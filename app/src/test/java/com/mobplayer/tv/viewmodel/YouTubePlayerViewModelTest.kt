@@ -2,9 +2,12 @@ package com.mobplayer.tv.viewmodel
 
 import android.util.Log
 import androidx.media3.exoplayer.source.MediaSource
+import com.mobplayer.tv.data.models.MediaItemModel
 import com.mobplayer.tv.repository.MediaRepository
 import com.mobplayer.tv.repository.ServerRepository
 import com.mobplayer.tv.repository.YouTubeRepository
+import com.mobplayer.tv.storage.WatchHistoryStore
+import com.mobplayer.tv.testutil.FakeSharedPreferences
 import com.mobplayer.tv.testutil.MainDispatcherRule
 import com.mobplayer.tv.testutil.youTubeItem
 import com.mobplayer.tv.testutil.youTubeItems
@@ -19,7 +22,9 @@ import io.mockk.mockkStatic
 import io.mockk.unmockkAll
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
@@ -42,10 +47,12 @@ class YouTubePlayerViewModelTest {
     private lateinit var youTubeRepository: YouTubeRepository
     private lateinit var mediaRepository: MediaRepository
     private lateinit var serverRepository: ServerRepository
+    private lateinit var watchHistoryStore: WatchHistoryStore
     private lateinit var viewModel: YouTubePlayerViewModel
 
     private val loadCount = MutableStateFlow(0L)
     private val currentMediaId = MutableStateFlow<String?>(null)
+    private val playbackEnded = MutableSharedFlow<String?>(extraBufferCapacity = 1)
     private val mediaSource: MediaSource = mockk()
 
     @Before
@@ -66,6 +73,7 @@ class YouTubePlayerViewModelTest {
         mediaRepository = mockk(relaxed = true)
         every { mediaRepository.loadCount } returns loadCount
         every { mediaRepository.currentMediaId } returns currentMediaId
+        every { mediaRepository.playbackEnded } returns playbackEnded
         every { mediaRepository.stop() } answers { currentMediaId.value = null }
         every { mediaRepository.loadMediaSource(any(), any()) } answers {
             loadCount.value++
@@ -73,7 +81,8 @@ class YouTubePlayerViewModelTest {
         }
 
         serverRepository = ServerRepository()
-        viewModel = YouTubePlayerViewModel(youTubeRepository, mediaRepository, serverRepository)
+        watchHistoryStore = WatchHistoryStore(FakeSharedPreferences())
+        viewModel = YouTubePlayerViewModel(youTubeRepository, mediaRepository, serverRepository, watchHistoryStore)
     }
 
     @After
@@ -252,5 +261,131 @@ class YouTubePlayerViewModelTest {
         advanceUntilIdle()
         assertNotNull(viewModel.uiState.value.item)
         assertEquals("fail", viewModel.uiState.value.error)
+    }
+
+    @Test
+    fun `video ending autoplays the first suggestion`() = runTest {
+        advanceUntilIdle()
+        viewModel.play(youTubeItem("abc"))
+        awaitResolved()
+
+        playbackEnded.emit("abc")
+        advanceUntilIdle()
+        val state = awaitResolved()
+
+        assertEquals("next1", state.item?.youtubeVideoId)
+        verify(exactly = 1) { mediaRepository.loadMediaSource(mediaSource, "next1") }
+        assertTrue(serverRepository.isPlayerActive.value)
+    }
+
+    @Test
+    fun `autoplay skips videos already watched this session`() = runTest {
+        coEvery { youTubeRepository.getSuggestions("next1") } returns
+            listOf(youTubeItem("abc"), youTubeItem("next1b"))
+        advanceUntilIdle()
+        viewModel.play(youTubeItem("abc"))
+        awaitResolved()
+        playbackEnded.emit("abc")
+        advanceUntilIdle()
+        assertEquals("next1", awaitResolved().item?.youtubeVideoId)
+
+        playbackEnded.emit("next1")
+        advanceUntilIdle()
+        assertEquals("next1b", awaitResolved().item?.youtubeVideoId)
+    }
+
+    @Test
+    fun `other media ending does not autoplay`() = runTest {
+        advanceUntilIdle()
+        viewModel.play(youTubeItem("abc"))
+        awaitResolved()
+
+        playbackEnded.emit("upload_1")
+        playbackEnded.emit(null)
+        advanceUntilIdle()
+
+        assertEquals("abc", viewModel.uiState.value.item?.youtubeVideoId)
+        coVerify(exactly = 1) { youTubeRepository.resolvePlaybackSource(any()) }
+    }
+
+    @Test
+    fun `video ending with no suggestions stays on the video`() = runTest {
+        coEvery { youTubeRepository.getSuggestions("abc") } returns emptyList()
+        advanceUntilIdle()
+        viewModel.play(youTubeItem("abc"))
+        awaitResolved()
+
+        playbackEnded.emit("abc")
+        advanceUntilIdle()
+
+        assertEquals("abc", viewModel.uiState.value.item?.youtubeVideoId)
+        coVerify(exactly = 1) { youTubeRepository.resolvePlaybackSource(any()) }
+    }
+
+    @Test
+    fun `video ending before suggestions arrive waits for them`() = runTest {
+        val suggestions = CompletableDeferred<List<MediaItemModel>>()
+        coEvery { youTubeRepository.getSuggestions("abc") } coAnswers { suggestions.await() }
+        advanceUntilIdle()
+        viewModel.play(youTubeItem("abc"))
+        awaitResolved()
+
+        playbackEnded.emit("abc")
+        advanceUntilIdle()
+        assertEquals("abc", viewModel.uiState.value.item?.youtubeVideoId)
+
+        suggestions.complete(listOf(youTubeItem("late1")))
+        advanceUntilIdle()
+        assertEquals("late1", awaitResolved().item?.youtubeVideoId)
+    }
+
+    @Test
+    fun `playing a video adds it to the watch history`() = runTest {
+        advanceUntilIdle()
+        viewModel.play(youTubeItem("abc", "Lofi Girl"))
+        awaitResolved()
+
+        assertEquals(listOf("abc"), watchHistoryStore.history.value.map { it.youtubeVideoId })
+        assertEquals("Lofi Girl", watchHistoryStore.history.value.single().title)
+    }
+
+    @Test
+    fun `video that fails to resolve is not added to the history`() = runTest {
+        coEvery { youTubeRepository.resolvePlaybackSource("abc") } throws RuntimeException("fail")
+        advanceUntilIdle()
+        viewModel.play(youTubeItem("abc"))
+        awaitResolved()
+
+        assertTrue(watchHistoryStore.history.value.isEmpty())
+    }
+
+    @Test
+    fun `ui state shows the history without the current video`() = runTest {
+        watchHistoryStore.record(youTubeItem("old1"))
+        watchHistoryStore.record(youTubeItem("abc"))
+        watchHistoryStore.record(youTubeItem("old2"))
+        advanceUntilIdle()
+
+        viewModel.play(youTubeItem("abc"))
+        assertEquals(listOf("old2", "old1"), viewModel.uiState.value.history.map { it.youtubeVideoId })
+
+        val state = awaitResolved()
+        assertEquals(listOf("old2", "old1"), state.history.map { it.youtubeVideoId })
+    }
+
+    @Test
+    fun `history updates as autoplay moves to the next video`() = runTest {
+        advanceUntilIdle()
+        viewModel.play(youTubeItem("abc"))
+        awaitResolved()
+        assertTrue(viewModel.uiState.value.history.isEmpty())
+
+        playbackEnded.emit("abc")
+        advanceUntilIdle()
+        val state = awaitResolved()
+
+        assertEquals("next1", state.item?.youtubeVideoId)
+        assertEquals(listOf("abc"), state.history.map { it.youtubeVideoId })
+        assertEquals(listOf("next1", "abc"), watchHistoryStore.history.value.map { it.youtubeVideoId })
     }
 }

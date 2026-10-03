@@ -91,5 +91,10 @@
   - Back on the pairing dialog closes a playing video first and only exits the app when nothing is playing.
   - Back via the phone's key-injection fallback closes the "Up next" row first.
 
+## Phase 10: YouTube Autoplay
+**Status: IN PROGRESS** (branch `feature-and-flow-fix`)
+- **Task 10.1:** When a YouTube video ends, the next "Up next" suggestion plays automatically. See "YouTube Autoplay" in `project_context.md`.
+- **Task 10.2:** Persistent YouTube watch history (`WatchHistoryStore`), shown as a "Watch history" row below "Up next" in the player. See "YouTube Watch History" in `project_context.md`.
+
 ## Open Items
 - **4K H.264 on low-end TV decoders**: e.g. a 3840×1728 `avc1.640033` (High@5.1) upload fails on `OMX.MS.AVC.Decoder` with `NO_EXCEEDS_CAPABILITIES`. Hardware limit, not an app bug; the file must be re-encoded (1080p H.264 or HEVC). Possible improvement: show a readable message on the phone and TV error screen instead of the raw ExoPlayer text.

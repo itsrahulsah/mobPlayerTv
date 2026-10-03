@@ -119,6 +119,18 @@ The project uses Dagger Hilt with constructor injection and clean repository pat
 - **Remote key routing**: `isUiNavigating` = minimised || "Up next" open || YouTube error panel showing (`onErrorVisibleChange`). Key-injection fallback sends Back through `onBackPressedDispatcher` (a raw Back key would become a Compose focus move), so the YouTube screen also has a `BackHandler` that closes "Up next" first.
 - **Pairing dialog** (`TvModalOverlay` with `onBack`): a disconnect can show it over a playing video; Back closes that player first, then `finish()` when nothing is playing.
 
+## YouTube Autoplay
+- `MediaRepository.playbackEnded` (`SharedFlow<String?>`, no replay) emits `activePlayingVideoId` on `Player.STATE_ENDED`.
+- `YouTubePlayerViewModel` ignores ends for other media (null id or a different id) and while resolving / on the error screen. Otherwise it waits for the suggestions call if a short video ended first, then `play()`s the first suggestion not in `watchedVideoIds` (falls back to the first suggestion when all were watched; nothing happens with no suggestions).
+- `watchedVideoIds` collects every video played since the screen opened (stops A→B→A loops) and is cleared on dismiss/close.
+- No countdown or opt-out yet: the next video starts immediately; Back still closes the player.
+
+## YouTube Watch History
+- `storage/WatchHistoryStore` (Hilt `@Singleton`): SharedPreferences `youtube_watch_history`, key `history`, a JSON list of `{videoId, title, subtitle, posterUrl, backdropUrl, duration, isLive}`. Most recent first, de-duplicated by video id, capped at 30 (`MAX_ENTRIES`). Corrupt JSON starts an empty history. Exposes `history: StateFlow<List<MediaItemModel>>`.
+- `YouTubePlayerViewModel` records a video right after `loadMediaSource` succeeds (user picks and autoplay both count; resolve failures don't). `YouTubePlayerUiState.history` is the stored list minus the current video.
+- `TvYouTubePlayerScreen`: the "Watch history" row sits under "Up next" inside the same focus-tracked column. Down/Up between the rows is wired with `focusProperties` to each row's `FocusRequester`, and each `LazyRow` has `focusRestorer()` (returns to the card focused last). Moving focus between the rows briefly makes the whole panel `Inactive`, so the collapse check runs in a `LaunchedEffect(hasFocus)` (only fires if focus is still gone after recomposition); reacting directly in `onFocusChanged` closed the panel on every Down press. The bottom panel is `verticalScroll` because both rows don't fit under the controls on a 540 dp screen; focus scrolls the focused row into view. Hidden when the history is empty.
+- No UI to clear the history yet (`WatchHistoryStore.clear()` exists).
+
 ## YouTube Stream Lookup Notes
 - `SmartTubePlayerEngine.resolvePlaybackSource` runs on IO; its library calls block and ignore cancellation, so `ensureActive()` is checked between strategies, at each fallback attempt and before `switchNextClientNow()` (the client is shared global state).
 - `buildMediaSource` (DASH manifest parse) runs on `Dispatchers.Default`.

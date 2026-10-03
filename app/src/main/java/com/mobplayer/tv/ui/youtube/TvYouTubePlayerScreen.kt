@@ -12,6 +12,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
@@ -29,7 +31,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.focus.FocusProperties
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
@@ -68,7 +74,7 @@ private const val SEEK_STEP_MS = 10_000L
 
 /**
  * Fullscreen YouTube player: resolving/buffering/error states plus auto-hiding D-pad controls.
- * D-pad Down opens an "Up next" suggestions row; Up or Back closes it.
+ * D-pad Down opens an "Up next" suggestions row with the watch history below it; Up or Back closes them.
  */
 @Composable
 fun TvYouTubePlayerScreen(
@@ -234,11 +240,13 @@ fun TvYouTubePlayerScreen(
                     YouTubeBadge()
                 }
 
-                // Bottom: title, channel, timeline, transport controls and the suggestions row
+                // Bottom: title, channel, timeline, transport controls, suggestions and history rows.
+                // Scrollable because both rows don't fit under the controls; focus scrolls them into view.
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
+                        .verticalScroll(rememberScrollState())
                         .padding(vertical = 32.dp)
                         .onKeyEvent { event ->
                             // Down from the transport controls opens suggestions.
@@ -311,6 +319,7 @@ fun TvYouTubePlayerScreen(
                         SuggestionsRow(
                             suggestions = state.suggestions,
                             isLoading = state.isLoadingSuggestions,
+                            history = state.history,
                             focusRequester = suggestionsFocus,
                             onFocusLeft = { showSuggestions = false },
                             onClick = onPlaySuggestion,
@@ -335,33 +344,39 @@ private fun UpNextHint(modifier: Modifier = Modifier) {
     }
 }
 
-/** "Up next" carousel. Collapses (via [onFocusLeft]) once focus moves back up to the controls. */
+/**
+ * "Up next" carousel with the "Watch history" row below it. Collapses (via [onFocusLeft]) once
+ * focus moves back up to the controls. Down/Up between the two rows is wired explicitly, and each
+ * row returns to the card focused last.
+ */
 @Composable
 private fun SuggestionsRow(
     suggestions: List<MediaItemModel>,
     isLoading: Boolean,
+    history: List<MediaItemModel>,
     focusRequester: FocusRequester,
     onFocusLeft: () -> Unit,
     onClick: (MediaItemModel) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var hasFocus by remember { mutableStateOf(false) }
     var hadFocus by remember { mutableStateOf(false) }
+    val currentOnFocusLeft by rememberUpdatedState(onFocusLeft)
+    // Moving focus from one row to the other briefly clears it from the whole panel, so collapse only
+    // if it is still gone once the move settles (a recomposition later), not on every focus event.
+    LaunchedEffect(hasFocus) {
+        if (hasFocus) hadFocus = true else if (hadFocus) currentOnFocusLeft()
+    }
+    val historyFocus = remember { FocusRequester() }
+    val hasHistory = history.isNotEmpty()
+    val upNextProperties: FocusProperties.() -> Unit = { if (hasHistory) down = historyFocus }
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .onFocusChanged {
-                if (hadFocus && !it.hasFocus) onFocusLeft()
-                hadFocus = it.hasFocus
-            },
+            .onFocusChanged { hasFocus = it.hasFocus },
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text(
-            text = "Up next",
-            color = Color.White,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 48.dp)
-        )
+        RowTitle("Up next")
         if (suggestions.isEmpty()) {
             // Focusable so the row still owns focus (and Up/Back still close it) while empty.
             Box(
@@ -369,6 +384,7 @@ private fun SuggestionsRow(
                     .padding(horizontal = 48.dp)
                     .height(80.dp)
                     .focusRequester(focusRequester)
+                    .focusProperties(upNextProperties)
                     .focusable(),
                 contentAlignment = Alignment.CenterStart
             ) {
@@ -379,20 +395,53 @@ private fun SuggestionsRow(
                 }
             }
         } else {
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 48.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(18.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                itemsIndexed(suggestions, key = { _, it -> it.id }) { index, suggestion ->
-                    TvMediaCard(
-                        item = suggestion,
-                        cardType = CardType.LANDSCAPE,
-                        onClick = onClick,
-                        modifier = if (index == 0) Modifier.focusRequester(focusRequester) else Modifier
-                    )
-                }
-            }
+            VideoCardRow(suggestions, onClick, focusRequester, upNextProperties)
+        }
+        if (hasHistory) {
+            RowTitle("Watch history", Modifier.padding(top = 8.dp))
+            VideoCardRow(history, onClick, historyFocus) { up = focusRequester }
+        }
+    }
+}
+
+@Composable
+private fun RowTitle(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text = text,
+        color = Color.White,
+        fontSize = 18.sp,
+        fontWeight = FontWeight.Bold,
+        modifier = modifier.padding(horizontal = 48.dp)
+    )
+}
+
+/**
+ * A row of video cards. Focusing [focusRequester] enters the row on the card focused last (the first
+ * card initially); [cardFocusProperties] applies to every card.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun VideoCardRow(
+    items: List<MediaItemModel>,
+    onClick: (MediaItemModel) -> Unit,
+    focusRequester: FocusRequester,
+    cardFocusProperties: FocusProperties.() -> Unit
+) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 48.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(18.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .focusRequester(focusRequester)
+            .focusRestorer()
+    ) {
+        itemsIndexed(items, key = { _, it -> it.id }) { _, item ->
+            TvMediaCard(
+                item = item,
+                cardType = CardType.LANDSCAPE,
+                onClick = onClick,
+                modifier = Modifier.focusProperties(cardFocusProperties)
+            )
         }
     }
 }
