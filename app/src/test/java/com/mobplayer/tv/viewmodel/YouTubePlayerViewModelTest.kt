@@ -21,6 +21,7 @@ import io.mockk.mockkObject
 import io.mockk.mockkStatic
 import io.mockk.unmockkAll
 import io.mockk.verify
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -30,6 +31,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.junit.After
@@ -54,6 +56,9 @@ class YouTubePlayerViewModelTest {
     private val loadCount = MutableStateFlow(0L)
     private val currentMediaId = MutableStateFlow<String?>(null)
     private val playbackEnded = MutableSharedFlow<String?>(extraBufferCapacity = 1)
+    private val playbackStarted = MutableSharedFlow<String?>(extraBufferCapacity = 1)
+    /** When false, loads never start playing (e.g. YouTube refusing the stream with HTTP 403). */
+    private var loadsStartPlaying = true
     private val mediaSource: MediaSource = mockk()
 
     @Before
@@ -75,10 +80,14 @@ class YouTubePlayerViewModelTest {
         every { mediaRepository.loadCount } returns loadCount
         every { mediaRepository.currentMediaId } returns currentMediaId
         every { mediaRepository.playbackEnded } returns playbackEnded
+        every { mediaRepository.playbackStarted } returns playbackStarted
         every { mediaRepository.stop() } answers { currentMediaId.value = null }
         every { mediaRepository.loadMediaSource(any(), any()) } answers {
             loadCount.value++
-            currentMediaId.value = secondArg()
+            val id: String = secondArg()
+            currentMediaId.value = id
+            // ExoPlayer reports isPlaying later through its listener, not during the load call.
+            if (loadsStartPlaying) CoroutineScope(mainDispatcherRule.dispatcher).launch { playbackStarted.emit(id) }
         }
 
         serverRepository = ServerRepository()
@@ -427,5 +436,41 @@ class YouTubePlayerViewModelTest {
         viewModel.play(youTubeItem("abc"))
         assertEquals(listOf("old"), viewModel.uiState.value.history.map { it.youtubeVideoId })
         awaitResolved()
+    }
+
+    @Test
+    fun `video that loads but never starts playing is not added to the history`() = runTest {
+        loadsStartPlaying = false
+        advanceUntilIdle()
+        viewModel.play(youTubeItem("abc"))
+        awaitResolved()
+        verify(exactly = 1) { mediaRepository.loadMediaSource(mediaSource, "abc") }
+        assertTrue(watchHistoryStore.history.value.isEmpty())
+
+        playbackStarted.emit("other") // another video's start doesn't count
+        advanceUntilIdle()
+        assertTrue(watchHistoryStore.history.value.isEmpty())
+
+        playbackStarted.emit("abc")
+        advanceUntilIdle()
+        assertEquals(listOf("abc"), watchHistoryStore.history.value.map { it.youtubeVideoId })
+    }
+
+    @Test
+    fun `video replaced before it starts playing is not added to the history`() = runTest {
+        loadsStartPlaying = false
+        advanceUntilIdle()
+        viewModel.play(youTubeItem("abc"))
+        awaitResolved()
+
+        viewModel.play(youTubeItem("def"))
+        awaitResolved()
+        playbackStarted.emit("abc") // a late start from the first video
+        advanceUntilIdle()
+        assertTrue(watchHistoryStore.history.value.isEmpty())
+
+        playbackStarted.emit("def")
+        advanceUntilIdle()
+        assertEquals(listOf("def"), watchHistoryStore.history.value.map { it.youtubeVideoId })
     }
 }

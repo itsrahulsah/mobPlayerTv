@@ -13,11 +13,13 @@ import com.mobplayer.tv.youtube.PlaybackSource
 import com.mobplayer.tv.youtube.SmartTubePlayerEngine
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -39,7 +41,8 @@ data class YouTubePlayerUiState(
  * Drives the dedicated YouTube player screen. Playback goes through the shared [MediaRepository]
  * ExoPlayer so the phone remote (play/pause/seek/volume) keeps working. When a video ends, the
  * first "Up next" suggestion not yet watched in this session plays automatically. Every video that
- * starts playing is added to the persistent [WatchHistoryStore].
+ * actually starts playing (not just loads: the stream can still fail, e.g. HTTP 403) is added to the
+ * persistent [WatchHistoryStore].
  */
 @HiltViewModel
 class YouTubePlayerViewModel @Inject constructor(
@@ -55,6 +58,7 @@ class YouTubePlayerViewModel @Inject constructor(
     private val httpDataSourceFactory by lazy { SmartTubePlayerEngine.createHttpDataSourceFactory() }
     private var resolveJob: Job? = null
     private var suggestionsJob: Job? = null
+    private var historyJob: Job? = null
 
     /** [MediaRepository.loadCount] while the player holds our video (or nothing, mid-resolve). */
     private var expectedLoadCount = 0L
@@ -96,6 +100,7 @@ class YouTubePlayerViewModel @Inject constructor(
         val videoId = item.youtubeVideoId ?: return
         resolveJob?.cancel()
         suggestionsJob?.cancel()
+        historyJob?.cancel()
         watchedVideoIds += videoId
         _uiState.value = YouTubePlayerUiState(
             item = item,
@@ -135,8 +140,12 @@ class YouTubePlayerViewModel @Inject constructor(
                 // Set before loading so the takeover watcher recognises our own load.
                 expectedLoadCount = mediaRepository.loadCount.value + 1
                 _uiState.update { it.copy(isResolving = false) }
+                // Subscribed before loading (on the main thread, so the start can't arrive first).
+                historyJob = viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) {
+                    mediaRepository.playbackStarted.first { it == videoId }
+                    watchHistoryStore.record(item)
+                }
                 mediaRepository.loadMediaSource(mediaSource, videoId)
-                watchHistoryStore.record(item)
                 serverRepository.postRemoteAction(
                     RemoteActionEvent("PLAY", "🎬 Playing", item.title, RemoteIconType.PLAY)
                 )
@@ -188,6 +197,7 @@ class YouTubePlayerViewModel @Inject constructor(
     private fun dismiss() {
         resolveJob?.cancel()
         suggestionsJob?.cancel()
+        historyJob?.cancel()
         watchedVideoIds.clear()
         if (_uiState.value.item != null) _uiState.value = YouTubePlayerUiState()
     }

@@ -147,4 +147,17 @@ class MediaRepositoryTest {
         }
         assertEquals("vid_end", ended.await())
     }
+
+    @Test
+    fun playbackStartedEmitsTheMediaIdWhenPlaybackStarts() = runBlocking {
+        // Subscribed before loading: the flow doesn't replay.
+        val started = async(Dispatchers.Default, start = CoroutineStart.UNDISPATCHED) {
+            withTimeout(10_000) { repository.playbackStarted.first() }
+        }
+        onMain {
+            repository.attach(owner)
+            repository.loadMediaSource(SilenceMediaSource(5_000_000L), "vid_start")
+        }
+        assertEquals("vid_start", started.await())
+    }
 }
