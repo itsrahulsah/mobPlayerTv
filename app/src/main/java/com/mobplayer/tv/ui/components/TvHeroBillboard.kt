@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -48,7 +49,7 @@ fun TvHeroBillboard(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(420.dp)
+            .height(300.dp)
     ) {
         // 1. Background Image with fallback gradient
         AsyncImage(
@@ -175,18 +176,20 @@ fun TvHeroBillboard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // Movie / Show Title
+            // Movie / Show Title (YouTube titles run long; two lines keep the hero compact)
             Text(
                 text = item.title,
                 color = Color.White,
-                fontSize = 36.sp,
+                fontSize = 26.sp,
                 fontWeight = FontWeight.Black,
-                lineHeight = 42.sp
+                lineHeight = 31.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
             )
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             // Genre Chips
             Text(
@@ -196,18 +199,19 @@ fun TvHeroBillboard(
                 fontWeight = FontWeight.SemiBold
             )
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             // Overview / Synopsis
             Text(
                 text = item.description,
                 color = TvColors.TextSecondary,
-                fontSize = 14.sp,
-                maxLines = 3,
-                lineHeight = 20.sp
+                fontSize = 13.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                lineHeight = 18.sp
             )
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             // Action Buttons Row (TV Focusable)
             Row(

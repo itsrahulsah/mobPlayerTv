@@ -18,10 +18,11 @@ enum class YouTubeCategory(val title: String, val subtitle: String) {
     TRENDING("Trending", "What's hot right now"),
     RECOMMENDED("Recommended", "Picked for you"),
     MUSIC("Music", "Top songs & music videos"),
-    GAMING("Gaming", "Gameplay, esports & streams"),
     NEWS("News", "Latest headlines"),
     MOVIES("Movies", "Trailers & film clips"),
-    SPORTS("Sports", "Highlights & live sports");
+    SPORTS("Sports", "Highlights & live sports"),
+    // Declaration order is the on-screen order (category bar and Home rails); Gaming goes last
+    GAMING("Gaming", "Gameplay, esports & streams");
 
     companion object {
         /** Categories shown as individual rails under "All". */
