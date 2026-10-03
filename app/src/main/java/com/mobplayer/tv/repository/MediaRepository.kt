@@ -155,7 +155,8 @@ class MediaRepository @Inject constructor(
     }
 
     fun setVolume(volume: Float) {
-        player?.volume = volume.coerceIn(0f, 1f)
+        // Created if needed, so a volume set before anything plays still applies to the first video
+        initialize().volume = volume.coerceIn(0f, 1f)
         updateState()
     }
 
@@ -177,16 +178,18 @@ class MediaRepository @Inject constructor(
             builder.setMimeType(resolvedMime)
         }
         val mediaItem = builder.build()
+        // The player is created on first use (see MainActivity), which a remote cast can precede
+        val player = initialize()
         if (isGrowingUploadStream(url)) {
-            player?.setMediaSource(buildGrowingUploadSource(mediaItem))
+            player.setMediaSource(buildGrowingUploadSource(mediaItem))
         } else {
-            player?.setMediaItem(mediaItem)
+            player.setMediaItem(mediaItem)
         }
-        player?.prepare()
+        player.prepare()
         if (startPositionMs > 0L) {
-            player?.seekTo(startPositionMs)
+            player.seekTo(startPositionMs)
         }
-        player?.play()
+        player.play()
     }
 
     private fun isGrowingUploadStream(url: String): Boolean =
@@ -217,9 +220,10 @@ class MediaRepository @Inject constructor(
     fun loadMediaSource(mediaSource: androidx.media3.exoplayer.source.MediaSource, videoId: String) {
         _loadCount.value++
         activePlayingVideoId = videoId
-        player?.setMediaSource(mediaSource)
-        player?.prepare()
-        player?.play()
+        val player = initialize()
+        player.setMediaSource(mediaSource)
+        player.prepare()
+        player.play()
     }
 
     private fun updateState() {

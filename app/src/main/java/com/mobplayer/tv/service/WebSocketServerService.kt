@@ -28,7 +28,7 @@ class WebSocketServerService : Service() {
     @Inject lateinit var networkMonitor: NetworkStateMonitor
     @Inject lateinit var serverRepository: ServerRepository
 
-    private val port = 8080
+    private val port = PORT
 
     /** Set in onDestroy so a network callback queued behind the shutdown doesn't re-register NSD. */
     @Volatile private var isStopped = false
@@ -116,7 +116,27 @@ class WebSocketServerService : Service() {
         private const val CHANNEL_ID = "MobPlayerTvServerChannel"
         private const val NOTIFICATION_ID = 1
 
+        private const val PORT = 8080
+
         /** Process-wide, so start/stop stay ordered across service instances (activity recreation). */
         private val serverExecutor = Executors.newSingleThreadExecutor { Thread(it, "SocketServer") }
+
+        /**
+         * Starts the server (and so the pairing PIN) right away. The service's own start waits for
+         * onCreate, which the main thread only gets to after the activity's first frame — seconds
+         * on a cold TV. Its later start is then a no-op.
+         */
+        fun startServerEarly(serverManager: KtorServerManager) {
+            serverExecutor.execute { serverManager.startServer(port = PORT) }
+        }
+
+        /**
+         * Stops the service along with an early-started server: a service stopped before its
+         * onCreate (Back on the startup loader) never runs onDestroy to stop the server itself.
+         */
+        fun stop(context: Context, serverManager: KtorServerManager) {
+            context.stopService(Intent(context, WebSocketServerService::class.java))
+            serverExecutor.execute { serverManager.stopServer() }
+        }
     }
 }

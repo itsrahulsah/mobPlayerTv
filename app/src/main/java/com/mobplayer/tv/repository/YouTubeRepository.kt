@@ -32,7 +32,8 @@ enum class YouTubeCategory(val title: String, val subtitle: String) {
 @Singleton
 class YouTubeRepository @Inject constructor() {
 
-    private val youTubeData: YouTubeData = YouTubeData.Builder().build()
+    // Lazy: the OkHttp client setup isn't needed until the feed loads, after the first frame
+    private val youTubeData: YouTubeData by lazy { YouTubeData.Builder().build() }
 
     suspend fun getVideos(category: YouTubeCategory): List<MediaItemModel> {
         val contents = when (category) {
