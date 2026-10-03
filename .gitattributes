@@ -1,1 +1,4 @@
 /forward-tv-port.sh text eol=lf
+/.githooks/* text eol=lf
+/.claude/hooks/*.sh text eol=lf
+/gradlew text eol=lf

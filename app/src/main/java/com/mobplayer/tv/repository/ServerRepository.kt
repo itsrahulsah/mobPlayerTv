@@ -12,8 +12,13 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class ServerRepository @Inject constructor() {
-    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+class ServerRepository internal constructor(
+    /** Runs the remote-action HUD dismiss timer; tests pass a virtual-time scope. */
+    private val scope: CoroutineScope
+) {
+    @Inject
+    constructor() : this(CoroutineScope(Dispatchers.Default + SupervisorJob()))
+
     private var actionDismissJob: Job? = null
 
     private val _connectionEvent = MutableStateFlow<ConnectionEvent>(ConnectionEvent.None)
@@ -132,7 +137,7 @@ class ServerRepository @Inject constructor() {
         _remoteActionEvent.value = event
         actionDismissJob?.cancel()
         actionDismissJob = scope.launch {
-            delay(2800)
+            delay(REMOTE_ACTION_DISMISS_MS)
             if (_remoteActionEvent.value == event) {
                 _remoteActionEvent.value = null
             }
@@ -168,6 +173,9 @@ class ServerRepository @Inject constructor() {
         }
     }
 }
+
+/** How long a remote action stays on the HUD before it is cleared. */
+internal const val REMOTE_ACTION_DISMISS_MS = 2_800L
 
 /** @param submit true when the remote pressed Enter/Search rather than just editing the text. */
 data class RemoteTextInput(val text: String, val submit: Boolean)

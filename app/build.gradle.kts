@@ -52,8 +52,30 @@ android {
     sourceSets.getByName("main").assets.srcDir(testClientAssets)
 }
 
+// Point git at the versioned hooks (.githooks/pre-commit runs the unit tests) for every clone and agent.
+// Leaves an existing hooks setup (husky, a global hooks folder) alone and warns instead.
+val installGitHooks by tasks.registering {
+    val repoDir = rootProject.projectDir
+    onlyIf { File(repoDir, ".git").exists() }
+    doLast {
+        fun git(vararg args: String): String? = runCatching {
+            val process = ProcessBuilder("git", *args).directory(repoDir).redirectErrorStream(true).start()
+            process.inputStream.bufferedReader().readText().trim().also { process.waitFor() }
+        }.getOrNull()
+
+        when (val current = git("config", "--get", "core.hooksPath").orEmpty()) {
+            "" -> git("config", "core.hooksPath", ".githooks")
+            ".githooks" -> Unit
+            else -> logger.warn(
+                "core.hooksPath is already '$current', so the MobPlayer pre-commit test hook is not installed. " +
+                    "Call .githooks/pre-commit from your own hook to keep running the unit tests before commits."
+            )
+        }
+    }
+}
+
 tasks.named("preBuild") {
-    dependsOn(syncTestClientAssets)
+    dependsOn(syncTestClientAssets, installGitHooks)
 }
 
 dependencies {
@@ -121,7 +143,10 @@ dependencies {
 
     // Testing
     testImplementation("junit:junit:4.13.2")
+    testImplementation("io.mockk:mockk:1.13.13")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("com.squareup.okhttp3:okhttp:3.14.9")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4:1.7.8")
     debugImplementation("androidx.compose.ui:ui-tooling:1.7.8")
