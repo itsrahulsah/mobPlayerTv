@@ -47,6 +47,7 @@ import com.mobplayer.tv.models.RemoteIconType
 import com.mobplayer.tv.service.WebSocketServerService
 import com.mobplayer.tv.ui.components.TvModalOverlay
 import com.mobplayer.tv.ui.components.TvRemoteActionHud
+import com.mobplayer.tv.ui.components.TvStartupLoaderOverlay
 import com.mobplayer.tv.ui.components.TvVideoPlayerOverlay
 import com.mobplayer.tv.ui.focus.BrowseFocusState
 import com.mobplayer.tv.ui.focus.LocalBrowseFocus
@@ -58,6 +59,8 @@ import com.mobplayer.tv.ui.youtube.TvYouTubePlayerScreen
 import com.mobplayer.tv.ui.pairing.TvPairingScreen
 import com.mobplayer.tv.ui.theme.TvColors
 import androidx.activity.viewModels
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import kotlinx.coroutines.delay
 import dagger.hilt.android.AndroidEntryPoint
 import java.util.concurrent.Executors
 import com.mobplayer.tv.viewmodel.TvMainViewModel
@@ -72,6 +75,8 @@ class MainActivity : ComponentActivity() {
     private val youTubeSearchViewModel: YouTubeSearchViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Branded splash instead of a blank window during cold start; hands off to TvStartupLoader
+        installSplashScreen()
         super.onCreate(savedInstanceState)
 
         val player = viewModel.initializePlayer()
@@ -92,10 +97,12 @@ class MainActivity : ComponentActivity() {
                 if (!injected) runOnUiThread { dispatchRemoteKeyDirectly(keyCode) }
             }
         }
-        // Start the WebSocket Ktor Service
-        Intent(this, WebSocketServerService::class.java).also { intent ->
-            startForegroundService(intent)
-        }
+        // Start the WebSocket Ktor Service. A foreground start, so the service may still promote
+        // itself if the user leaves the app before its onCreate runs (a plain start would then hit
+        // ForegroundServiceStartNotAllowedException on Android 12+). The service calls
+        // startForeground() before anything else and keeps its slow setup off the main thread,
+        // which keeps it well inside the 10s deadline.
+        startForegroundService(Intent(this, WebSocketServerService::class.java))
 
         setContent {
             // Scroll positions + last played item for Home/Search/My List, kept across the player
@@ -155,6 +162,17 @@ class MainActivity : ComponentActivity() {
                 selectedHomeTab = homeTab
             }
             val playerState by viewModel.playerStateFlow.collectAsState()
+
+            // Startup loader stays up until the control server posts its first PIN (or a remote is
+            // already connected), so the pairing dialog doesn't pop in over a half-ready home screen.
+            // Latched once done; the timeout keeps a server that fails to start from trapping the user.
+            val isConnected by viewModel.serverRepository.isConnected.collectAsState()
+            var isStartupDone by rememberSaveable { mutableStateOf(false) }
+            if (connectionEvent != ConnectionEvent.None || isConnected) isStartupDone = true
+            LaunchedEffect(Unit) {
+                delay(STARTUP_LOADER_TIMEOUT_MS)
+                isStartupDone = true
+            }
 
             // Keep the display awake while a video plays (both players share the same ExoPlayer);
             // paused/stopped playback lets the TV sleep normally.
@@ -343,6 +361,9 @@ class MainActivity : ComponentActivity() {
 
                         // Floating Remote Action HUD (renders on top of all screens)
                         TvRemoteActionHud(viewModel = viewModel)
+
+                        // Back on the loader leaves the app, as it would on the splash before it
+                        TvStartupLoaderOverlay(visible = !isStartupDone, onBack = ::finish)
                     }
                 }
             }
@@ -396,6 +417,8 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 }
+
+private const val STARTUP_LOADER_TIMEOUT_MS = 8_000L
 
 @Composable
 private fun ConnectionConflictDialog(

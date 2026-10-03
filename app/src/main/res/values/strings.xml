@@ -4,14 +4,16 @@
     <string name="brand_name">MOBPLAYER</string>
     <string name="brand_tag">TV</string>
     <string name="app_logo_description">App Logo</string>
+    <string name="starting_up">Starting up…</string>
 
     <!-- Pairing Screen -->
     <string name="enter_pin">Enter this PIN on your device:</string>
     <string name="pairing_title">Connect Your Mobile Controller</string>
     <string name="pairing_subtitle">Open the MobPlayer mobile app on your phone and enter this 4-digit pairing PIN:</string>
     <string name="pairing_wifi_desc">Wi-Fi</string>
-    <string name="tv_server_emulator">TV Server (Emulator): ws://10.0.2.2:%1$d/control</string>
-    <string name="tv_server_ip">TV Server: ws://%1$s:%2$d/control</string>
+    <string name="pairing_waiting">Waiting for your phone to connect…</string>
+    <string name="tv_server_emulator">TV Server (Emulator): http://10.0.2.2:%1$d</string>
+    <string name="tv_server_ip">TV Server: http://%1$s:%2$d</string>
     <string name="tv_server_port">TV Server Port: %1$d</string>
     <string name="emulator_setup_title">⚡ Android Emulator Testing Setup</string>
     <string name="emulator_setup_instructions">1. On your PC terminal, run:  adb forward tcp:%1$d tcp:%1$d\n2. In MobPlayer Remote app, tap \'+\' (Enter IP) and use: 10.0.2.2 : %1$d</string>

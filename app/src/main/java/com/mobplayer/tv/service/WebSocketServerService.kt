@@ -17,6 +17,7 @@ import com.mobplayer.tv.network.NsdHelper
 import com.mobplayer.tv.server.KtorServerManager
 import com.mobplayer.tv.repository.ServerRepository
 import dagger.hilt.android.AndroidEntryPoint
+import java.util.concurrent.Executors
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -29,45 +30,46 @@ class WebSocketServerService : Service() {
 
     private val port = 8080
 
+    /** Set in onDestroy so a network callback queued behind the shutdown doesn't re-register NSD. */
+    @Volatile private var isStopped = false
+
     override fun onCreate() {
-        super.onCreate()
+        // First thing, ahead of super.onCreate() (Hilt injection builds the server graph), so the
+        // startForegroundService() promise is kept even if the work below is slow
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, createNotification())
-        
-        // Start Ktor server exactly once. It binds to 0.0.0.0, so it handles IP changes automatically.
-        serverManager.startServer(port = port)
+        super.onCreate()
 
-        val localIp = NetworkUtils.getLocalIpAddress() ?: "0.0.0.0"
-        val isEmulator = NetworkUtils.isEmulator()
-        val displayIp = if (isEmulator) "10.0.2.2 (Local: $localIp)" else localIp
-        Log.i(TAG, "🚀 [WebSocketServerService] Socket server UP on IP: $displayIp, Port: $port | Endpoint: ws://$localIp:$port/control (Emulator: $isEmulator)")
-        serverRepository.logRemoteEvent("Service", "Socket server UP on IP: $displayIp, Port: $port")
+        val serviceName = getString(R.string.app_name)
+        // Ktor start-up (class loading, socket bind) and NSD/network-callback binder calls take
+        // seconds on a loaded TV; off the main thread they can't stall the UI or trip an ANR.
+        // Serialised on serverExecutor so a restart's start never overtakes the previous stop.
+        serverExecutor.execute {
+            // Start Ktor server exactly once. It binds to 0.0.0.0, so it handles IP changes automatically.
+            serverManager.startServer(port = port)
 
-        // Register NSD broadcast immediately on service startup
-        nsdHelper.registerService(port = port, serviceName = getString(R.string.app_name))
+            // Fires onAvailable right away when a network is up, which registers the NSD broadcast;
+            // later changes re-register it so phones discover the current IP.
+            networkMonitor.startMonitoring(
+                onNetworkAvailable = {
+                    val newIp = NetworkUtils.getLocalIpAddress() ?: "0.0.0.0"
+                    Log.i(TAG, "🌐 [Network Available] Socket server reachable on IP: $newIp, Port: $port | Endpoint: ws://$newIp:$port/control")
+                    serverRepository.logRemoteEvent("Network", "Network connected. Socket server at ws://$newIp:$port/control")
+                    serverExecutor.execute {
+                        if (!isStopped) nsdHelper.registerService(port = port, serviceName = serviceName)
+                    }
+                },
+                onNetworkLost = {
+                    Log.w(TAG, "⚠️ [Network Lost] Wi-Fi/Ethernet disconnected for socket server on port $port")
+                    serverRepository.logRemoteEvent("Network", "Network disconnected for socket server on port $port")
+                    // Stop broadcasting if network is lost
+                    serverExecutor.execute { nsdHelper.tearDown() }
+                }
+            )
+        }
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // Monitor network changes to broadcast the correct IP via NSD
-        networkMonitor.startMonitoring(
-            onNetworkAvailable = {
-                val newIp = NetworkUtils.getLocalIpAddress() ?: "0.0.0.0"
-                Log.i(TAG, "🌐 [Network Available] Socket server reachable on IP: $newIp, Port: $port | Endpoint: ws://$newIp:$port/control")
-                serverRepository.logRemoteEvent("Network", "Network connected. Socket server at ws://$newIp:$port/control")
-                // Restart only the NSD broadcast
-                nsdHelper.tearDown()
-                nsdHelper.registerService(port = port, serviceName = getString(R.string.app_name))
-            },
-            onNetworkLost = {
-                Log.w(TAG, "⚠️ [Network Lost] Wi-Fi/Ethernet disconnected for socket server on port $port")
-                serverRepository.logRemoteEvent("Network", "Network disconnected for socket server on port $port")
-                // Stop broadcasting if network is lost
-                nsdHelper.tearDown()
-            }
-        )
-        
-        return START_STICKY
-    }
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         Log.i(TAG, "🛑 [WebSocketServerService] App task removed from Recents. Stopping socket server.")
@@ -77,9 +79,13 @@ class WebSocketServerService : Service() {
 
     override fun onDestroy() {
         Log.i(TAG, "🛑 [WebSocketServerService] Shutting down socket server on port $port")
-        networkMonitor.stopMonitoring()
-        nsdHelper.tearDown()
-        serverManager.stopServer()
+        isStopped = true
+        // stopServer() waits up to 2s for Ktor to shut down; keep that off the main thread too
+        serverExecutor.execute {
+            networkMonitor.stopMonitoring()
+            nsdHelper.tearDown()
+            serverManager.stopServer()
+        }
         super.onDestroy()
     }
 
@@ -101,7 +107,7 @@ class WebSocketServerService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.notification_title))
             .setContentText(getString(R.string.notification_content))
-            .setSmallIcon(R.drawable.ic_launcher)
+            .setSmallIcon(R.drawable.ic_notification)
             .build()
     }
 
@@ -109,5 +115,8 @@ class WebSocketServerService : Service() {
         private const val TAG = "WebSocketServerService"
         private const val CHANNEL_ID = "MobPlayerTvServerChannel"
         private const val NOTIFICATION_ID = 1
+
+        /** Process-wide, so start/stop stay ordered across service instances (activity recreation). */
+        private val serverExecutor = Executors.newSingleThreadExecutor { Thread(it, "SocketServer") }
     }
 }
