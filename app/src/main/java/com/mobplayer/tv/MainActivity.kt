@@ -84,7 +84,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         // Server start-up runs in the background alongside the first frame instead of after it
-        WebSocketServerService.startServerEarly(serverManager)
+        WebSocketServerService.startServerEarly(this, serverManager)
 
         // Created when a player screen first shows (or media loads): building ExoPlayer and its
         // MediaSession cost a few hundred ms on the main thread ahead of the first frame
@@ -426,7 +426,7 @@ class MainActivity : ComponentActivity() {
         keyInjector.shutdownNow()
         if (!isChangingConfigurations) {
             viewModel.releasePlayer()
-            WebSocketServerService.stop(this, serverManager)
+            WebSocketServerService.stop(this, this, serverManager)
         }
         super.onDestroy()
     }
