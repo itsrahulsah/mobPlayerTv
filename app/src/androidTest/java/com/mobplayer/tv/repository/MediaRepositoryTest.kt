@@ -1,7 +1,14 @@
 package com.mobplayer.tv.repository
 
+import androidx.media3.exoplayer.source.SilenceMediaSource
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -126,5 +133,31 @@ class MediaRepositoryTest {
 
         repository.release(oldScreen)
         assertNotNull(repository.player)
+    }
+
+    @Test
+    fun playbackEndedEmitsTheMediaIdWhenPlaybackFinishes() = runBlocking {
+        // Subscribed before loading: the flow doesn't replay, so an end with no collector is dropped.
+        val ended = async(Dispatchers.Default, start = CoroutineStart.UNDISPATCHED) {
+            withTimeout(10_000) { repository.playbackEnded.first() }
+        }
+        onMain {
+            repository.attach(owner)
+            repository.loadMediaSource(SilenceMediaSource(200_000L), "vid_end")
+        }
+        assertEquals("vid_end", ended.await())
+    }
+
+    @Test
+    fun playbackStartedEmitsTheMediaIdWhenPlaybackStarts() = runBlocking {
+        // Subscribed before loading: the flow doesn't replay.
+        val started = async(Dispatchers.Default, start = CoroutineStart.UNDISPATCHED) {
+            withTimeout(10_000) { repository.playbackStarted.first() }
+        }
+        onMain {
+            repository.attach(owner)
+            repository.loadMediaSource(SilenceMediaSource(5_000_000L), "vid_start")
+        }
+        assertEquals("vid_start", started.await())
     }
 }

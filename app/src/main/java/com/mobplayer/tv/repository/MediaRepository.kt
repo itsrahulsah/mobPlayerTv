@@ -8,7 +8,9 @@ import androidx.media3.session.MediaSession
 import com.mobplayer.tv.models.PlayerStatePayload
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -41,6 +43,17 @@ class MediaRepository @Inject constructor(
     /** Bumped on every load, so a takeover is visible even for URL casts that carry no media id. */
     private val _loadCount = MutableStateFlow(0L)
     val loadCount: StateFlow<Long> = _loadCount
+
+    /** Emits the media id (null for URL casts without one) each time playback reaches the end. */
+    private val _playbackEnded = MutableSharedFlow<String?>(extraBufferCapacity = 1)
+    val playbackEnded: SharedFlow<String?> = _playbackEnded
+
+    /**
+     * Emits the media id each time playback actually starts or resumes (frames/audio rendering), as
+     * opposed to a load that may still fail. No replay: subscribe before the load.
+     */
+    private val _playbackStarted = MutableSharedFlow<String?>(extraBufferCapacity = 1)
+    val playbackStarted: SharedFlow<String?> = _playbackStarted
     var onPlaybackProgressUpdate: ((videoId: String, positionMs: Long, durationMs: Long) -> Unit)? = null
     var onPlaybackError: ((error: androidx.media3.common.PlaybackException) -> Unit)? = null
 
@@ -83,6 +96,7 @@ class MediaRepository @Inject constructor(
                 android.util.Log.d("MediaRepository", "▶ onIsPlayingChanged: isPlaying=$isPlaying")
                 updateState()
                 if (isPlaying) {
+                    _playbackStarted.tryEmit(activePlayingVideoId)
                     startProgressPolling()
                 } else {
                     stopProgressPolling()
@@ -99,6 +113,7 @@ class MediaRepository @Inject constructor(
                 }
                 android.util.Log.d("MediaRepository", "🔄 onPlaybackStateChanged: state=$stateName, playWhenReady=${player?.playWhenReady}")
                 updateState()
+                if (playbackState == Player.STATE_ENDED) _playbackEnded.tryEmit(activePlayingVideoId)
             }
 
             override fun onPositionDiscontinuity(
