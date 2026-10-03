@@ -6,6 +6,7 @@ import com.mobplayer.tv.data.models.MediaItemModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,8 +21,9 @@ import javax.inject.Singleton
  * YouTube videos the user has played on this TV, most recent first. Persisted in
  * SharedPreferences so the "Watch history" row in the player survives restarts.
  *
- * [history] starts empty and is filled by [load] on [ioDispatcher]: the store is created during the
- * first composition, so reading the prefs file there would block cold start.
+ * [history] starts empty and is filled by [load]. All prefs access runs on [ioDispatcher]: the store
+ * is created during the first composition, and a read there (or in [record] before the load has
+ * finished) would block the main thread on disk.
  */
 @Singleton
 class WatchHistoryStore(
@@ -63,10 +65,18 @@ class WatchHistoryStore(
         }
     }
 
-    /** Moves [item] to the front of the history, dropping the oldest entries past [MAX_ENTRIES]. */
-    @Synchronized
-    fun record(item: MediaItemModel) {
+    /**
+     * Moves [item] to the front of the history, dropping the oldest entries past [MAX_ENTRIES].
+     * Finishes even if the caller is cancelled, so a video that started playing is never lost.
+     */
+    suspend fun record(item: MediaItemModel) {
         val videoId = item.youtubeVideoId ?: return
+        withContext(ioDispatcher + NonCancellable) {
+            synchronized(this@WatchHistoryStore) { recordLocked(videoId, item) }
+        }
+    }
+
+    private fun recordLocked(videoId: String, item: MediaItemModel) {
         val entry = Entry(
             videoId = videoId,
             title = item.title,
@@ -78,16 +88,17 @@ class WatchHistoryStore(
         )
         val updated = (listOf(entry) + loadEntries().filter { it.videoId != videoId }).take(MAX_ENTRIES)
         prefs.edit().putString(KEY_HISTORY, json.encodeToString(updated)).apply()
-        // Built from the stored list, so this is the full history even if load() hasn't run yet.
+        // Built from the stored list, not _history, so it is complete even if load() hasn't run yet.
         _history.value = updated.map(::toItem)
         loaded = true
     }
 
-    @Synchronized
-    fun clear() {
-        prefs.edit().remove(KEY_HISTORY).apply()
-        _history.value = emptyList()
-        loaded = true
+    suspend fun clear() = withContext(ioDispatcher) {
+        synchronized(this@WatchHistoryStore) {
+            prefs.edit().remove(KEY_HISTORY).apply()
+            _history.value = emptyList()
+            loaded = true
+        }
     }
 
     private fun loadEntries(): List<Entry> {

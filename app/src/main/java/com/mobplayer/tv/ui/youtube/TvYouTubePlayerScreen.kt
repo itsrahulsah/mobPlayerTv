@@ -132,8 +132,8 @@ fun TvYouTubePlayerScreen(
             isOverlayVisible = false
         }
     }
-    // Re-keyed on suggestions arriving: the loading placeholder holding focus gets replaced by cards.
-    LaunchedEffect(showOverlay, showSuggestions, error, state.suggestions.isEmpty()) {
+    // SuggestionsRow moves focus itself when suggestions replace its loading placeholder.
+    LaunchedEffect(showOverlay, showSuggestions, error) {
         // The error panel focuses its own Retry button.
         runCatching {
             when {
@@ -367,6 +367,15 @@ private fun SuggestionsRow(
     LaunchedEffect(hasFocus) {
         if (hasFocus) hadFocus = true else if (hadFocus) currentOnFocusLeft()
     }
+    // Updated only when something in the panel gains focus: the placeholder losing focus as it is
+    // removed must not clear it.
+    var placeholderFocusedLast by remember { mutableStateOf(false) }
+    // Suggestions replaced the loading placeholder: follow with focus only if the placeholder had it,
+    // not if the user already moved on to the history row.
+    LaunchedEffect(suggestions.isEmpty()) {
+        if (suggestions.isNotEmpty() && placeholderFocusedLast) runCatching { focusRequester.requestFocus() }
+    }
+    val clearPlaceholderFocus = Modifier.onFocusChanged { if (it.hasFocus) placeholderFocusedLast = false }
     val historyFocus = remember { FocusRequester() }
     val hasHistory = history.isNotEmpty()
     val upNextProperties: FocusProperties.() -> Unit = { if (hasHistory) down = historyFocus }
@@ -385,6 +394,7 @@ private fun SuggestionsRow(
                     .height(80.dp)
                     .focusRequester(focusRequester)
                     .focusProperties(upNextProperties)
+                    .onFocusChanged { if (it.isFocused) placeholderFocusedLast = true }
                     .focusable(),
                 contentAlignment = Alignment.CenterStart
             ) {
@@ -395,11 +405,11 @@ private fun SuggestionsRow(
                 }
             }
         } else {
-            VideoCardRow(suggestions, onClick, focusRequester, upNextProperties)
+            VideoCardRow(suggestions, onClick, focusRequester, upNextProperties, clearPlaceholderFocus)
         }
         if (hasHistory) {
             RowTitle("Watch history", Modifier.padding(top = 8.dp))
-            VideoCardRow(history, onClick, historyFocus) { up = focusRequester }
+            VideoCardRow(history, onClick, historyFocus, { up = focusRequester }, clearPlaceholderFocus)
         }
     }
 }
@@ -425,12 +435,13 @@ private fun VideoCardRow(
     items: List<MediaItemModel>,
     onClick: (MediaItemModel) -> Unit,
     focusRequester: FocusRequester,
-    cardFocusProperties: FocusProperties.() -> Unit
+    cardFocusProperties: FocusProperties.() -> Unit,
+    modifier: Modifier = Modifier
 ) {
     LazyRow(
         contentPadding = PaddingValues(horizontal = 48.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(18.dp),
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .focusRequester(focusRequester)
             .focusRestorer()

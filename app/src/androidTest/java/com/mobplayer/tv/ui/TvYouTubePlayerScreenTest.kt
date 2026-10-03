@@ -1,5 +1,8 @@
 package com.mobplayer.tv.ui
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
@@ -163,5 +166,54 @@ class TvYouTubePlayerScreenTest {
         composeRule.waitForIdle()
         composeRule.onNodeWithContentDescription("Play").assertIsFocused()
         composeRule.onNodeWithText("Watch history").assertDoesNotExist()
+    }
+
+    private var lateSuggestions by mutableStateOf<List<MediaItemModel>>(emptyList())
+
+    /** Opens the screen with suggestions still loading; set [lateSuggestions] to deliver them. */
+    private fun showWhileSuggestionsLoad(history: List<MediaItemModel>) =
+        composeRule.setContent {
+            TvYouTubePlayerScreen(
+                player = player,
+                state = YouTubePlayerUiState(
+                    item = video("now", "Now playing"),
+                    suggestions = lateSuggestions,
+                    isLoadingSuggestions = lateSuggestions.isEmpty(),
+                    history = history
+                ),
+                playerState = null,
+                onTogglePlay = {},
+                onSeekTo = {},
+                onRetry = {},
+                onBack = {},
+                onPlaySuggestion = {}
+            )
+        }
+
+    @Test
+    fun suggestionsArrivingMoveFocusOffTheLoadingPlaceholder() {
+        showWhileSuggestionsLoad(history = listOf(video("old", "Old video")))
+        openSuggestions()
+
+        lateSuggestions = listOf(video("s1", "Suggested video"))
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("Suggested video").assertIsFocused()
+        composeRule.onNodeWithText("Watch history").assertExists()
+    }
+
+    @Test
+    fun suggestionsArrivingKeepFocusOnWatchHistory() {
+        showWhileSuggestionsLoad(history = listOf(video("old", "Old video")))
+        openSuggestions()
+        composeRule.onRoot().performKeyInput { pressKey(Key.DirectionDown) }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("Old video").assertIsFocused()
+
+        lateSuggestions = listOf(video("s1", "Suggested video"))
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("Old video").assertIsFocused()
+        composeRule.onNodeWithText("Suggested video").assertExists()
     }
 }

@@ -1,9 +1,14 @@
 package com.mobplayer.tv.storage
 
+import android.content.SharedPreferences
+import com.mobplayer.tv.data.models.MediaItemModel
 import com.mobplayer.tv.testutil.FakeSharedPreferences
 import com.mobplayer.tv.testutil.youTubeItem
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.runBlocking
+import java.util.Collections
+import java.util.concurrent.Executors
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -23,6 +28,9 @@ class WatchHistoryStoreTest {
 
     /** A store as the app sees it after startup: created, then loaded. */
     private fun loadedStore() = newStore().also { runBlocking { it.load() } }
+
+    private fun WatchHistoryStore.recordNow(item: MediaItemModel) = runBlocking { record(item) }
+    private fun WatchHistoryStore.clearNow() = runBlocking { clear() }
 
     private fun ids() = store.history.value.map { it.youtubeVideoId }
 
@@ -44,7 +52,7 @@ class WatchHistoryStoreTest {
 
     @Test
     fun `stored history appears only after load`() {
-        store.record(youTubeItem("a"))
+        store.recordNow(youTubeItem("a"))
 
         val restarted = newStore()
         assertTrue(restarted.history.value.isEmpty())
@@ -54,10 +62,10 @@ class WatchHistoryStoreTest {
 
     @Test
     fun `record before load keeps the stored history`() {
-        store.record(youTubeItem("a"))
+        store.recordNow(youTubeItem("a"))
 
         val restarted = newStore()
-        restarted.record(youTubeItem("b"))
+        restarted.recordNow(youTubeItem("b"))
         assertEquals(listOf("b", "a"), restarted.history.value.map { it.youtubeVideoId })
 
         // A load finishing after the record must not replace it with the older stored list.
@@ -67,28 +75,28 @@ class WatchHistoryStoreTest {
 
     @Test
     fun `record puts the newest video first`() {
-        store.record(youTubeItem("a"))
-        store.record(youTubeItem("b"))
+        store.recordNow(youTubeItem("a"))
+        store.recordNow(youTubeItem("b"))
         assertEquals(listOf("b", "a"), ids())
     }
 
     @Test
     fun `replaying a video moves it to the front without duplicating it`() {
-        store.record(youTubeItem("a"))
-        store.record(youTubeItem("b"))
-        store.record(youTubeItem("a"))
+        store.recordNow(youTubeItem("a"))
+        store.recordNow(youTubeItem("b"))
+        store.recordNow(youTubeItem("a"))
         assertEquals(listOf("a", "b"), ids())
     }
 
     @Test
     fun `items without a YouTube id are ignored`() {
-        store.record(youTubeItem("a").copy(youtubeVideoId = null))
+        store.recordNow(youTubeItem("a").copy(youtubeVideoId = null))
         assertTrue(store.history.value.isEmpty())
     }
 
     @Test
     fun `history is capped at the most recent entries`() {
-        (1..WatchHistoryStore.MAX_ENTRIES + 5).forEach { store.record(youTubeItem("v$it")) }
+        (1..WatchHistoryStore.MAX_ENTRIES + 5).forEach { store.recordNow(youTubeItem("v$it")) }
         assertEquals(WatchHistoryStore.MAX_ENTRIES, store.history.value.size)
         assertEquals("v${WatchHistoryStore.MAX_ENTRIES + 5}", ids().first())
         assertFalse("v1" in ids())
@@ -96,7 +104,7 @@ class WatchHistoryStoreTest {
 
     @Test
     fun `history survives a restart with its display fields`() {
-        store.record(
+        store.recordNow(
             youTubeItem("a", "Lofi Girl").copy(
                 subtitle = "Lofi Records",
                 posterUrl = "https://i.ytimg.com/a.jpg",
@@ -124,9 +132,37 @@ class WatchHistoryStoreTest {
 
     @Test
     fun `clear removes all entries`() {
-        store.record(youTubeItem("a"))
-        store.clear()
+        store.recordNow(youTubeItem("a"))
+        store.clearNow()
         assertTrue(store.history.value.isEmpty())
         assertTrue(loadedStore().history.value.isEmpty())
+    }
+
+    @Test
+    fun `load, record and clear touch prefs only on the io dispatcher`() {
+        val threads = Collections.synchronizedSet(mutableSetOf<String>())
+        val tracked = object : SharedPreferences by prefs {
+            override fun getString(key: String, defValue: String?): String? {
+                threads += Thread.currentThread().name.substringBefore(" @") // debug mode appends the coroutine
+                return prefs.getString(key, defValue)
+            }
+
+            override fun edit(): SharedPreferences.Editor {
+                threads += Thread.currentThread().name.substringBefore(" @") // debug mode appends the coroutine
+                return prefs.edit()
+            }
+        }
+        val executor = Executors.newSingleThreadExecutor { Thread(it, "history-io") }
+        try {
+            val ioStore = WatchHistoryStore({ tracked }, executor.asCoroutineDispatcher())
+            runBlocking {
+                ioStore.load()
+                ioStore.record(youTubeItem("a"))
+                ioStore.clear()
+            }
+            assertEquals(setOf("history-io"), threads.toSet())
+        } finally {
+            executor.shutdown()
+        }
     }
 }
