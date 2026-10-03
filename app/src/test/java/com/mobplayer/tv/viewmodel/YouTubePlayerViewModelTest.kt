@@ -48,6 +48,7 @@ class YouTubePlayerViewModelTest {
     private lateinit var mediaRepository: MediaRepository
     private lateinit var serverRepository: ServerRepository
     private lateinit var watchHistoryStore: WatchHistoryStore
+    private val historyPrefs = FakeSharedPreferences()
     private lateinit var viewModel: YouTubePlayerViewModel
 
     private val loadCount = MutableStateFlow(0L)
@@ -81,7 +82,7 @@ class YouTubePlayerViewModelTest {
         }
 
         serverRepository = ServerRepository()
-        watchHistoryStore = WatchHistoryStore(FakeSharedPreferences())
+        watchHistoryStore = WatchHistoryStore({ historyPrefs }, mainDispatcherRule.dispatcher)
         viewModel = YouTubePlayerViewModel(youTubeRepository, mediaRepository, serverRepository, watchHistoryStore)
     }
 
@@ -408,5 +409,23 @@ class YouTubePlayerViewModelTest {
         assertEquals("next1", state.item?.youtubeVideoId)
         assertEquals(listOf("abc"), state.history.map { it.youtubeVideoId })
         assertEquals(listOf("next1", "abc"), watchHistoryStore.history.value.map { it.youtubeVideoId })
+    }
+
+    @Test
+    fun `stored history is loaded in the background after creation`() = runTest {
+        WatchHistoryStore({ historyPrefs }).record(youTubeItem("old"))
+        var reads = 0
+        val store = WatchHistoryStore({ reads++; historyPrefs }, mainDispatcherRule.dispatcher)
+
+        viewModel = YouTubePlayerViewModel(youTubeRepository, mediaRepository, serverRepository, store)
+        assertEquals("creating the view model must not read prefs", 0, reads)
+
+        advanceUntilIdle()
+        assertEquals(1, reads)
+        assertEquals(listOf("old"), store.history.value.map { it.youtubeVideoId })
+
+        viewModel.play(youTubeItem("abc"))
+        assertEquals(listOf("old"), viewModel.uiState.value.history.map { it.youtubeVideoId })
+        awaitResolved()
     }
 }

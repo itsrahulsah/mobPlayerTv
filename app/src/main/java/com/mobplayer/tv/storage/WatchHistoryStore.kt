@@ -4,9 +4,12 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.mobplayer.tv.data.models.MediaItemModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -16,14 +19,23 @@ import javax.inject.Singleton
 /**
  * YouTube videos the user has played on this TV, most recent first. Persisted in
  * SharedPreferences so the "Watch history" row in the player survives restarts.
+ *
+ * [history] starts empty and is filled by [load] on [ioDispatcher]: the store is created during the
+ * first composition, so reading the prefs file there would block cold start.
  */
 @Singleton
-class WatchHistoryStore(private val prefs: SharedPreferences) {
+class WatchHistoryStore(
+    private val prefsProvider: () -> SharedPreferences,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+) {
 
     @Inject
     constructor(@ApplicationContext context: Context) : this(
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        { context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
     )
+
+    private val prefs by lazy(prefsProvider)
+    private var loaded = false
 
     @Serializable
     private data class Entry(
@@ -38,8 +50,18 @@ class WatchHistoryStore(private val prefs: SharedPreferences) {
 
     private val json = Json { ignoreUnknownKeys = true }
 
-    private val _history = MutableStateFlow(load())
+    private val _history = MutableStateFlow<List<MediaItemModel>>(emptyList())
     val history: StateFlow<List<MediaItemModel>> = _history.asStateFlow()
+
+    /** Reads the stored history into [history] once; later calls return immediately. */
+    suspend fun load() = withContext(ioDispatcher) {
+        synchronized(this@WatchHistoryStore) {
+            if (!loaded) {
+                _history.value = loadEntries().map(::toItem)
+                loaded = true
+            }
+        }
+    }
 
     /** Moves [item] to the front of the history, dropping the oldest entries past [MAX_ENTRIES]. */
     @Synchronized
@@ -56,16 +78,17 @@ class WatchHistoryStore(private val prefs: SharedPreferences) {
         )
         val updated = (listOf(entry) + loadEntries().filter { it.videoId != videoId }).take(MAX_ENTRIES)
         prefs.edit().putString(KEY_HISTORY, json.encodeToString(updated)).apply()
+        // Built from the stored list, so this is the full history even if load() hasn't run yet.
         _history.value = updated.map(::toItem)
+        loaded = true
     }
 
     @Synchronized
     fun clear() {
         prefs.edit().remove(KEY_HISTORY).apply()
         _history.value = emptyList()
+        loaded = true
     }
-
-    private fun load(): List<MediaItemModel> = loadEntries().map(::toItem)
 
     private fun loadEntries(): List<Entry> {
         val raw = prefs.getString(KEY_HISTORY, null) ?: return emptyList()

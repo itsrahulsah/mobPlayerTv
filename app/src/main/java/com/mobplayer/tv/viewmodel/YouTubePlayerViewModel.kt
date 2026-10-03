@@ -81,6 +81,8 @@ class YouTubePlayerViewModel @Inject constructor(
                 if (state.item != null && !state.isResolving && state.error == null && mediaId == null) dismiss()
             }
         }
+        // Off the main thread: this view model is created in the first composition.
+        viewModelScope.launch { watchHistoryStore.load() }
         viewModelScope.launch {
             watchHistoryStore.history.collect { all -> _uiState.update { it.copy(history = all.without(it.item)) } }
         }
