@@ -31,24 +31,34 @@ class YouTubeFeedViewModel @Inject constructor(
     private val youTubeRepository: YouTubeRepository
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(YouTubeFeedUiState())
+    // Loading until start(): the feed isn't fetched before the app has finished starting up
+    private val _uiState = MutableStateFlow(YouTubeFeedUiState(isLoading = true))
     val uiState: StateFlow<YouTubeFeedUiState> = _uiState.asStateFlow()
 
     val categories = YouTubeCategory.entries
 
     private val cache = mutableMapOf<YouTubeCategory, List<MediaItemModel>>()
     private var loadJob: Job? = null
+    private var isStarted = false
 
-    init {
-        load(YouTubeCategory.ALL)
+    /**
+     * Fetches the initial feed. Deferred by the caller until start-up is done: the parallel
+     * category fetches and their parsing compete with the first frame for a TV's few cores.
+     */
+    fun start() {
+        if (isStarted) return
+        isStarted = true
+        load(_uiState.value.selectedCategory)
     }
 
     fun selectCategory(category: YouTubeCategory) {
-        if (_uiState.value.selectedCategory == category) return
+        if (isStarted && _uiState.value.selectedCategory == category) return
+        isStarted = true
         load(category)
     }
 
     fun refresh() {
+        isStarted = true
         cache.clear()
         load(_uiState.value.selectedCategory)
     }

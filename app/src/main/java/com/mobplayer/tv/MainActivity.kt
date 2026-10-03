@@ -44,6 +44,7 @@ import androidx.compose.material3.MaterialTheme
 
 import com.mobplayer.tv.models.RemoteActionEvent
 import com.mobplayer.tv.models.RemoteIconType
+import com.mobplayer.tv.server.KtorServerManager
 import com.mobplayer.tv.service.WebSocketServerService
 import com.mobplayer.tv.ui.components.TvModalOverlay
 import com.mobplayer.tv.ui.components.TvRemoteActionHud
@@ -63,6 +64,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import kotlinx.coroutines.delay
 import dagger.hilt.android.AndroidEntryPoint
 import java.util.concurrent.Executors
+import javax.inject.Inject
 import com.mobplayer.tv.viewmodel.TvMainViewModel
 import com.mobplayer.tv.viewmodel.ConnectionEvent
 
@@ -74,12 +76,19 @@ class MainActivity : ComponentActivity() {
     private val youTubePlayerViewModel: YouTubePlayerViewModel by viewModels()
     private val youTubeSearchViewModel: YouTubeSearchViewModel by viewModels()
 
+    @Inject lateinit var serverManager: KtorServerManager
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // Branded splash instead of a blank window during cold start; hands off to TvStartupLoader
         installSplashScreen()
         super.onCreate(savedInstanceState)
 
-        val player = viewModel.initializePlayer()
+        // Server start-up runs in the background alongside the first frame instead of after it
+        WebSocketServerService.startServerEarly(this, serverManager)
+
+        // Created when a player screen first shows (or media loads): building ExoPlayer and its
+        // MediaSession cost a few hundred ms on the main thread ahead of the first frame
+        val player by lazy(LazyThreadSafetyMode.NONE) { viewModel.initializePlayer() }
 
         // Setup D-pad key event injection from mobile controller. Keys go through the real input
         // pipeline (like a hardware remote) so they reach the on-screen keyboard and leave touch
@@ -172,6 +181,11 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(Unit) {
                 delay(STARTUP_LOADER_TIMEOUT_MS)
                 isStartupDone = true
+            }
+            LaunchedEffect(isStartupDone) {
+                if (!isStartupDone) return@LaunchedEffect
+                withFrameNanos { } // past the first frame too, which the PIN can now beat
+                youTubeFeedViewModel.start()
             }
 
             // Keep the display awake while a video plays (both players share the same ExoPlayer);
@@ -411,8 +425,8 @@ class MainActivity : ComponentActivity() {
         viewModel.serverRepository.onInjectKeyEvent = null
         keyInjector.shutdownNow()
         if (!isChangingConfigurations) {
-            viewModel.mediaRepository.release()
-            stopService(Intent(this, WebSocketServerService::class.java))
+            viewModel.releasePlayer()
+            WebSocketServerService.stop(this, this, serverManager)
         }
         super.onDestroy()
     }

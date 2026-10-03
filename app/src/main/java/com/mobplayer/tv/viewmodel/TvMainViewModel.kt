@@ -28,7 +28,13 @@ class TvMainViewModel @Inject constructor(
     val remoteActionEvent = serverRepository.remoteActionEvent
     val uploadedVideos = videoUploadManager.uploadedVideosFlow
 
+    init {
+        mediaRepository.attach(this)
+    }
+
     fun initializePlayer() = mediaRepository.initialize()
+
+    fun releasePlayer() = mediaRepository.release(this)
     
     fun closePlayer() {
         serverRepository.closePlayer()
@@ -60,6 +66,6 @@ class TvMainViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
-        mediaRepository.release()
+        releasePlayer()
     }
 }

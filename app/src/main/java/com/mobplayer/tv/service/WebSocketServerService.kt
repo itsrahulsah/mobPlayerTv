@@ -28,7 +28,7 @@ class WebSocketServerService : Service() {
     @Inject lateinit var networkMonitor: NetworkStateMonitor
     @Inject lateinit var serverRepository: ServerRepository
 
-    private val port = 8080
+    private val port = PORT
 
     /** Set in onDestroy so a network callback queued behind the shutdown doesn't re-register NSD. */
     @Volatile private var isStopped = false
@@ -116,7 +116,35 @@ class WebSocketServerService : Service() {
         private const val CHANNEL_ID = "MobPlayerTvServerChannel"
         private const val NOTIFICATION_ID = 1
 
+        private const val PORT = 8080
+
         /** Process-wide, so start/stop stay ordered across service instances (activity recreation). */
         private val serverExecutor = Executors.newSingleThreadExecutor { Thread(it, "SocketServer") }
+
+        /** The screen that last started the server; only it may stop it. Main thread only. */
+        private var owner: Any? = null
+
+        /**
+         * Starts the server (and so the pairing PIN) right away. The service's own start waits for
+         * onCreate, which the main thread only gets to after the activity's first frame — seconds
+         * on a cold TV. Its later start is then a no-op.
+         */
+        fun startServerEarly(owner: Any, serverManager: KtorServerManager) {
+            this.owner = owner
+            serverExecutor.execute { serverManager.startServer(port = PORT) }
+        }
+
+        /**
+         * Stops the service along with an early-started server: a service stopped before its
+         * onCreate (Back on the startup loader) never runs onDestroy to stop the server itself.
+         * Ignored unless [owner] started it: after a quick close-and-reopen the old screen's
+         * onDestroy can run after the new screen started, and must not take its server down.
+         */
+        fun stop(owner: Any, context: Context, serverManager: KtorServerManager) {
+            if (this.owner !== owner) return
+            this.owner = null
+            context.stopService(Intent(context, WebSocketServerService::class.java))
+            serverExecutor.execute { serverManager.stopServer() }
+        }
     }
 }
