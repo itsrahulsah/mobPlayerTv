@@ -121,7 +121,7 @@ The project uses Dagger Hilt with constructor injection and clean repository pat
 
 ## YouTube Autoplay
 - `MediaRepository.playbackEnded` (`SharedFlow<String?>`, no replay) emits `activePlayingVideoId` on `Player.STATE_ENDED`.
-- `YouTubePlayerViewModel` ignores ends for other media (null id or a different id) and while resolving / on the error screen. Otherwise it waits for the suggestions call if a short video ended first, then `play()`s the first suggestion not in `watchedVideoIds` (falls back to the first suggestion when all were watched; nothing happens with no suggestions).
+- `YouTubePlayerViewModel` ignores ends for other media (null id or a different id) and while resolving / on the error screen. Otherwise it waits for the suggestions call if a short video ended first, then `play()`s the first suggestion not in `watchedVideoIds` (nothing happens when every suggestion was already watched, so A→B→A loops can't start, or when there are no suggestions).
 - `watchedVideoIds` collects every video played since the screen opened (stops A→B→A loops) and is cleared on dismiss/close.
 - No countdown or opt-out yet: the next video starts immediately; Back still closes the player.
 

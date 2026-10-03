@@ -295,6 +295,27 @@ class YouTubePlayerViewModelTest {
     }
 
     @Test
+    fun `autoplay stops when every suggestion was already watched`() = runTest {
+        // A suggests only B and B suggests only A: autoplay must not bounce between them forever.
+        coEvery { youTubeRepository.getSuggestions("a") } returns listOf(youTubeItem("b"))
+        coEvery { youTubeRepository.getSuggestions("b") } returns listOf(youTubeItem("a"))
+        advanceUntilIdle()
+        viewModel.play(youTubeItem("a"))
+        awaitResolved()
+        playbackEnded.emit("a")
+        advanceUntilIdle()
+        assertEquals("b", awaitResolved().item?.youtubeVideoId)
+
+        playbackEnded.emit("b")
+        advanceUntilIdle()
+
+        assertEquals("b", viewModel.uiState.value.item?.youtubeVideoId)
+        coVerify(exactly = 1) { youTubeRepository.resolvePlaybackSource("a") }
+        coVerify(exactly = 1) { youTubeRepository.resolvePlaybackSource("b") }
+        assertEquals(listOf("b", "a"), watchHistoryStore.history.value.map { it.youtubeVideoId })
+    }
+
+    @Test
     fun `other media ending does not autoplay`() = runTest {
         advanceUntilIdle()
         viewModel.play(youTubeItem("abc"))

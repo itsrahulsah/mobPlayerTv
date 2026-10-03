@@ -266,7 +266,7 @@ MobPlayer TV is built for a **trusted home LAN**. Keep these limits in mind:
 
 Every change must come with new or updated tests; see [`AGENTS.md`](AGENTS.md) for the rules that all contributors and coding agents follow. The unit tests run automatically: a git pre-commit hook in `.githooks/` (Gradle installs it on the first build) blocks commits of Kotlin changes while tests fail, and CI runs them on every push and pull request.
 
-There are 180 tests in 19 classes. Unit tests use [MockK](https://mockk.io) and `kotlinx-coroutines-test`; instrumentation tests run against a real ExoPlayer, a real Ktor server on a free port, and Compose UI.
+There are 181 tests in 19 classes. Unit tests use [MockK](https://mockk.io) and `kotlinx-coroutines-test`; instrumentation tests run against a real ExoPlayer, a real Ktor server on a free port, and Compose UI.
 
 | Module | Type | Test class | Tests |
 | :--- | :--- | :--- | :---: |
@@ -277,7 +277,7 @@ There are 180 tests in 19 classes. Unit tests use [MockK](https://mockk.io) and 
 | `app` | Unit | `WatchHistoryStoreTest` | 8 |
 | `app` | Unit (mocks) | `TvMainViewModelTest` | 12 |
 | `app` | Unit (mocks) | `YouTubeFeedViewModelTest` | 11 |
-| `app` | Unit (mocks) | `YouTubePlayerViewModelTest` | 22 |
+| `app` | Unit (mocks) | `YouTubePlayerViewModelTest` | 23 |
 | `app` | Unit (mocks) | `YouTubeSearchViewModelTest` | 13 |
 | `app` | Instrumentation | `AuthManagerTest` | 4 |
 | `app` | Instrumentation | `MediaRepositoryTest` | 10 |

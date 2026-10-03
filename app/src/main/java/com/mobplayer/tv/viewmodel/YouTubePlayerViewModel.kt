@@ -170,8 +170,8 @@ class YouTubePlayerViewModel @Inject constructor(
         suggestionsJob?.join()
         val current = _uiState.value
         if (current.item !== item) return // closed or replaced while waiting
-        val next = current.suggestions.firstOrNull { it.youtubeVideoId !in watchedVideoIds }
-            ?: current.suggestions.firstOrNull { it.youtubeVideoId != null }
+        // Stop once every suggestion was watched: replaying one would loop (A suggests B, B suggests A).
+        val next = current.suggestions.firstOrNull { it.youtubeVideoId != null && it.youtubeVideoId !in watchedVideoIds }
             ?: return
         play(next)
     }
