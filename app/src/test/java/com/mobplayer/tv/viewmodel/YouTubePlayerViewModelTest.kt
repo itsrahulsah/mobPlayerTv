@@ -110,6 +110,10 @@ class YouTubePlayerViewModelTest {
         verify { mediaRepository.stop() }
         assertTrue(serverRepository.isPlayerActive.value)
         assertEquals("Lofi Girl", serverRepository.activeMediaTitle.value)
+
+        // Let the resolve finish: a Dispatchers.Default hop still in flight when the test ends
+        // resumes onto the reset Main dispatcher and fails the next test.
+        awaitResolved()
     }
 
     @Test
