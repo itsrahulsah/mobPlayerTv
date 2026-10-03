@@ -52,8 +52,16 @@ android {
     sourceSets.getByName("main").assets.srcDir(testClientAssets)
 }
 
+// Point git at the versioned hooks (.githooks/pre-commit runs the unit tests) for every clone and agent.
+val installGitHooks by tasks.registering(Exec::class) {
+    onlyIf { rootProject.file(".git").exists() }
+    workingDir = rootProject.projectDir
+    commandLine("git", "config", "core.hooksPath", ".githooks")
+    isIgnoreExitValue = true
+}
+
 tasks.named("preBuild") {
-    dependsOn(syncTestClientAssets)
+    dependsOn(syncTestClientAssets, installGitHooks)
 }
 
 dependencies {
@@ -121,7 +129,10 @@ dependencies {
 
     // Testing
     testImplementation("junit:junit:4.13.2")
+    testImplementation("io.mockk:mockk:1.13.13")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("com.squareup.okhttp3:okhttp:3.14.9")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4:1.7.8")
     debugImplementation("androidx.compose.ui:ui-tooling:1.7.8")

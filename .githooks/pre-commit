@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Blocks commits that change Kotlin/Gradle code while the unit tests fail.
+# Installed via `git config core.hooksPath .githooks` (Gradle's installGitHooks does this).
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR -- '*.kt' '*.kts')
+[ -z "$staged" ] && exit 0
+
+if [ "$OS" = "Windows_NT" ]; then gradle=./gradlew.bat; else gradle=./gradlew; fi
+
+echo "pre-commit: Kotlin changes staged, running unit tests ($gradle test)..."
+if output=$("$gradle" test --console=plain 2>&1); then
+    echo "pre-commit: unit tests passed"
+    exit 0
+fi
+
+echo "$output" | grep -E 'FAILED|e: |error:|tests completed' | head -40
+echo
+echo "pre-commit: unit tests failed, commit blocked. Fix the failures (see build/reports/tests) and commit again."
+exit 1

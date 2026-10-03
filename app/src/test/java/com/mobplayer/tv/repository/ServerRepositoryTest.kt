@@ -3,6 +3,8 @@ package com.mobplayer.tv.repository
 import com.mobplayer.tv.models.RemoteActionEvent
 import com.mobplayer.tv.models.RemoteIconType
 import com.mobplayer.tv.viewmodel.ConnectionEvent
+import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.first
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -132,5 +134,64 @@ class ServerRepositoryTest {
         Thread.sleep(50)
         assertEquals(19, receivedKey)
         serverRepository.onInjectKeyEvent = null
+    }
+
+    @Test
+    fun `test requestPin falls back to a random four digit pin`() {
+        serverRepository.onRequestNewPin = null
+        val pin = serverRepository.requestPin()
+        assertTrue(pin.toInt() in 1000..9999)
+        assertFalse(serverRepository.isConnected.value)
+    }
+
+    @Test
+    fun `test resolving a connection conflict reports the choice and clears the dialog`() {
+        var result: Boolean? = null
+        serverRepository.promptConnectionConflict("Tablet") { result = it }
+
+        val event = serverRepository.connectionEvent.value as ConnectionEvent.ConnectionConflict
+        event.onResolve(false)
+
+        assertEquals(false, result)
+        assertTrue(serverRepository.connectionEvent.value is ConnectionEvent.None)
+    }
+
+    @Test
+    fun `test postRemoteText emits text input to collectors`() = kotlinx.coroutines.test.runTest {
+        val received = async(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+            serverRepository.remoteTextInput.first()
+        }
+        serverRepository.postRemoteText("cat videos", submit = true)
+        assertEquals(RemoteTextInput("cat videos", submit = true), received.await())
+    }
+
+    @Test
+    fun `test setUiNavigating toggles state`() {
+        assertFalse(serverRepository.isUiNavigating.value)
+        serverRepository.setUiNavigating(true)
+        assertTrue(serverRepository.isUiNavigating.value)
+        serverRepository.setUiNavigating(false)
+        assertFalse(serverRepository.isUiNavigating.value)
+    }
+
+    @Test
+    fun `test remote action hud event is dismissed automatically`() {
+        val action = RemoteActionEvent("PLAY", "Playing", iconType = RemoteIconType.PLAY)
+        serverRepository.postRemoteAction(action)
+        assertEquals(action, serverRepository.remoteActionEvent.value)
+
+        Thread.sleep(3_200)
+        assertNull(serverRepository.remoteActionEvent.value)
+    }
+
+    @Test
+    fun `test newer remote action is not dismissed by the older timer`() {
+        serverRepository.postRemoteAction(RemoteActionEvent("PLAY", "Playing", iconType = RemoteIconType.PLAY))
+        Thread.sleep(2_000)
+        val newer = RemoteActionEvent("PAUSE", "Paused", iconType = RemoteIconType.PAUSE)
+        serverRepository.postRemoteAction(newer)
+
+        Thread.sleep(1_200) // past the first event's 2.8s timer, inside the second's
+        assertEquals(newer, serverRepository.remoteActionEvent.value)
     }
 }

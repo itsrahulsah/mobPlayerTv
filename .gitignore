@@ -67,3 +67,5 @@ scratch/
 
 # SmartTube YouTube engine AARs are vendored dependencies, not build outputs
 !app/libs/*.aar
+.claude/.last-passing-tests
+.claude/settings.local.json

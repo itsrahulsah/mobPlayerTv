@@ -224,4 +224,79 @@ class VideoUploadManagerTest {
         val malicious = uploadManager.getVideoFile("../../../etc/passwd")
         assertNull(malicious)
     }
+
+    @Test
+    fun `test markUploadFailed records error and deletes partial file`() {
+        val active = uploadManager.createActiveUpload("broken.mp4", null, 1000L)
+        uploadManager.writeChunk(active.uploadId, ByteArray(100), 100)
+        val error = java.io.IOException("client went away")
+
+        uploadManager.markUploadFailed(active.uploadId, error)
+
+        assertSame(error, active.error)
+        assertFalse(active.file.exists())
+        assertNull(uploadManager.getActiveUpload(active.uploadId))
+        assertTrue(uploadManager.uploadedVideosFlow.value.isEmpty())
+        // Unknown ids are ignored
+        uploadManager.markUploadFailed("upload_missing", error)
+    }
+
+    @Test
+    fun `test writeChunk and markUploadCompleted reject unknown uploads`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            uploadManager.writeChunk("upload_missing", ByteArray(1), 1)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            uploadManager.markUploadCompleted("upload_missing")
+        }
+    }
+
+    @Test
+    fun `test createActiveUpload title falls back to file name`() {
+        val fromName = uploadManager.createActiveUpload("Beach Day.mov", "   ", 0L)
+        assertEquals("Beach Day", fromName.metadata.title)
+        assertEquals("video/mp4", fromName.metadata.mimeType)
+        assertTrue(fromName.metadata.fileName.endsWith("_Beach_Day.mov"))
+
+        Thread.sleep(2) // upload ids are millisecond timestamps
+        val noName = uploadManager.createActiveUpload(".mp4", null, 0L)
+        assertEquals("Uploaded Video", noName.metadata.title)
+    }
+
+    @Test
+    fun `test updatePlaybackProgress keeps known duration and ignores unknown ids`() {
+        val active = uploadManager.createActiveUpload("film.mp4", "Film", 10L)
+        uploadManager.writeChunk(active.uploadId, ByteArray(10), 10)
+        val meta = uploadManager.markUploadCompleted(active.uploadId)
+        uploadManager.updatePlaybackProgress(meta.id, 1_000L, 90_000L)
+
+        val updated = uploadManager.updatePlaybackProgress(meta.id, 2_000L, 0L)
+        assertEquals(90_000L, updated?.durationMs)
+        assertEquals(2_000L, updated?.lastPlayedPositionMs)
+        assertTrue((updated?.lastPlayedAt ?: 0L) > 0L)
+
+        assertNull(uploadManager.updatePlaybackProgress("vid_missing", 1L, 1L))
+    }
+
+    @Test
+    fun `test findCompletedVideoFileByUploadId and getVideoFile for missing files`() {
+        assertNull(uploadManager.findCompletedVideoFileByUploadId("upload_123"))
+        assertNull(uploadManager.getVideoFile("nope.mp4"))
+        assertNull(uploadManager.getVideoMetadata("vid_missing"))
+        assertFalse(uploadManager.deleteVideo("vid_missing"))
+    }
+
+    @Test
+    fun `test cleanupStaleUploads keeps recently active uploads`() {
+        uploadManager.createActiveUpload("fresh.mp4", "Fresh", 1000L)
+        uploadManager.cleanupStaleUploads()
+        assertEquals(1, uploadManager.getActiveUploadCount())
+    }
+
+    @Test
+    fun `test corrupt metadata file is skipped on load`() {
+        File(uploadDir, "garbage.mp4.meta.json").writeText("{not json")
+        val manager = VideoUploadManager(uploadDir)
+        assertTrue(manager.uploadedVideosFlow.value.isEmpty())
+    }
 }
