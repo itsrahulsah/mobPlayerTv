@@ -44,6 +44,20 @@ class MediaRepository @Inject constructor(
     var onPlaybackProgressUpdate: ((videoId: String, positionMs: Long, durationMs: Long) -> Unit)? = null
     var onPlaybackError: ((error: androidx.media3.common.PlaybackException) -> Unit)? = null
 
+    /**
+     * The screen (its ViewModel) the player is shown on. Remote commands create the player on
+     * demand only while one is attached: once released, a cast arriving during server shutdown or
+     * to a sticky-restarted service must not start audio with nothing on screen.
+     */
+    private var owner: Any? = null
+
+    fun attach(owner: Any) {
+        this.owner = owner
+    }
+
+    /** The player, created if a screen is attached; null otherwise (commands are then dropped). */
+    private fun playerOrCreate(): ExoPlayer? = player ?: owner?.let { initialize() }
+
     fun initialize(): ExoPlayer {
         player?.let { return it }
 
@@ -124,7 +138,10 @@ class MediaRepository @Inject constructor(
         progressJob = null
     }
 
-    fun release() {
+    /** Releases the player, unless a newer screen has attached since (a quick relaunch). */
+    fun release(owner: Any) {
+        if (this.owner !== owner) return
+        this.owner = null
         stopProgressPolling()
         mediaSession?.release()
         mediaSession = null
@@ -156,7 +173,8 @@ class MediaRepository @Inject constructor(
 
     fun setVolume(volume: Float) {
         // Created if needed, so a volume set before anything plays still applies to the first video
-        initialize().volume = volume.coerceIn(0f, 1f)
+        val player = playerOrCreate() ?: return
+        player.volume = volume.coerceIn(0f, 1f)
         updateState()
     }
 
@@ -179,7 +197,7 @@ class MediaRepository @Inject constructor(
         }
         val mediaItem = builder.build()
         // The player is created on first use (see MainActivity), which a remote cast can precede
-        val player = initialize()
+        val player = playerOrCreate() ?: return
         if (isGrowingUploadStream(url)) {
             player.setMediaSource(buildGrowingUploadSource(mediaItem))
         } else {
@@ -220,7 +238,7 @@ class MediaRepository @Inject constructor(
     fun loadMediaSource(mediaSource: androidx.media3.exoplayer.source.MediaSource, videoId: String) {
         _loadCount.value++
         activePlayingVideoId = videoId
-        val player = initialize()
+        val player = playerOrCreate() ?: return
         player.setMediaSource(mediaSource)
         player.prepare()
         player.play()

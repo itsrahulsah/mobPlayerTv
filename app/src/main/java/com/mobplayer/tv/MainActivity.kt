@@ -425,7 +425,7 @@ class MainActivity : ComponentActivity() {
         viewModel.serverRepository.onInjectKeyEvent = null
         keyInjector.shutdownNow()
         if (!isChangingConfigurations) {
-            viewModel.mediaRepository.release()
+            viewModel.releasePlayer()
             WebSocketServerService.stop(this, serverManager)
         }
         super.onDestroy()
