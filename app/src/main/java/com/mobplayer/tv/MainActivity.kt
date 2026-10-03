@@ -14,8 +14,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -49,7 +47,7 @@ import com.mobplayer.tv.models.RemoteIconType
 import com.mobplayer.tv.service.WebSocketServerService
 import com.mobplayer.tv.ui.components.TvModalOverlay
 import com.mobplayer.tv.ui.components.TvRemoteActionHud
-import com.mobplayer.tv.ui.components.TvStartupLoader
+import com.mobplayer.tv.ui.components.TvStartupLoaderOverlay
 import com.mobplayer.tv.ui.components.TvVideoPlayerOverlay
 import com.mobplayer.tv.ui.focus.BrowseFocusState
 import com.mobplayer.tv.ui.focus.LocalBrowseFocus
@@ -99,17 +97,12 @@ class MainActivity : ComponentActivity() {
                 if (!injected) runOnUiThread { dispatchRemoteKeyDirectly(keyCode) }
             }
         }
-        // Start the WebSocket Ktor Service. A plain start from the visible activity is allowed and,
-        // unlike startForegroundService, has no 10s startForeground() deadline: on a busy TV the
-        // service's onCreate can queue behind this activity's first frame for longer than that (ANR).
-        // The service still promotes itself to foreground in onCreate.
-        val serviceIntent = Intent(this, WebSocketServerService::class.java)
-        try {
-            startService(serviceIntent)
-        } catch (e: IllegalStateException) {
-            // Recreated while in the background, where plain starts are refused
-            startForegroundService(serviceIntent)
-        }
+        // Start the WebSocket Ktor Service. A foreground start, so the service may still promote
+        // itself if the user leaves the app before its onCreate runs (a plain start would then hit
+        // ForegroundServiceStartNotAllowedException on Android 12+). The service calls
+        // startForeground() before anything else and keeps its slow setup off the main thread,
+        // which keeps it well inside the 10s deadline.
+        startForegroundService(Intent(this, WebSocketServerService::class.java))
 
         setContent {
             // Scroll positions + last played item for Home/Search/My List, kept across the player
@@ -369,13 +362,8 @@ class MainActivity : ComponentActivity() {
                         // Floating Remote Action HUD (renders on top of all screens)
                         TvRemoteActionHud(viewModel = viewModel)
 
-                        AnimatedVisibility(
-                            visible = !isStartupDone,
-                            enter = EnterTransition.None,
-                            exit = fadeOut(animationSpec = tween(300))
-                        ) {
-                            TvStartupLoader()
-                        }
+                        // Back on the loader leaves the app, as it would on the splash before it
+                        TvStartupLoaderOverlay(visible = !isStartupDone, onBack = ::finish)
                     }
                 }
             }

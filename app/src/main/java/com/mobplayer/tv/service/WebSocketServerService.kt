@@ -34,10 +34,11 @@ class WebSocketServerService : Service() {
     @Volatile private var isStopped = false
 
     override fun onCreate() {
-        super.onCreate()
-        // First thing, so the foreground promise is kept even if the work below is slow
+        // First thing, ahead of super.onCreate() (Hilt injection builds the server graph), so the
+        // startForegroundService() promise is kept even if the work below is slow
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, createNotification())
+        super.onCreate()
 
         val serviceName = getString(R.string.app_name)
         // Ktor start-up (class loading, socket bind) and NSD/network-callback binder calls take
