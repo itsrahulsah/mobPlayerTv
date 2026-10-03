@@ -2,10 +2,38 @@
 # Blocks commits that change Kotlin/Gradle code while the unit tests fail.
 # Installed via `git config core.hooksPath .githooks` (Gradle's installGitHooks does this).
 
-staged=$(git diff --cached --name-only --diff-filter=ACMR -- '*.kt' '*.kts')
+# Any staged change counts, deletions included: removing a class still in use breaks the build.
+staged=$(git diff --cached --name-only -- '*.kt' '*.kts')
 [ -z "$staged" ] && exit 0
 
 if [ "$OS" = "Windows_NT" ]; then gradle=./gradlew.bat; else gradle=./gradlew; fi
+
+# Test exactly what is being committed: set unstaged edits to tracked files aside as a patch,
+# so the working tree matches the index. Re-applying it is conflict-free by construction.
+# (Untracked files stay in place and are compiled too.)
+patch="$(git rev-parse --git-dir)/pre-commit-unstaged.patch"
+if [ -f "$patch" ]; then
+    echo "pre-commit: $patch exists from an earlier interrupted run." >&2
+    echo "pre-commit: restore it with 'git apply \"$patch\"' (then delete it), and commit again." >&2
+    exit 1
+fi
+if ! git diff --quiet; then
+    git diff --binary > "$patch" && git checkout -- . || { echo "pre-commit: could not set aside unstaged changes." >&2; exit 1; }
+fi
+
+restore() {
+    status=$?
+    [ -f "$patch" ] || exit $status
+    git checkout -- . 2>/dev/null
+    if git apply --whitespace=nowarn "$patch"; then
+        rm -f "$patch"
+        exit $status
+    fi
+    echo "pre-commit: could not re-apply your unstaged changes; they are saved in $patch" >&2
+    echo "pre-commit: commit blocked. Restore them with 'git apply \"$patch\"'." >&2
+    exit 1
+}
+trap restore EXIT
 
 echo "pre-commit: Kotlin changes staged, running unit tests ($gradle test)..."
 if output=$("$gradle" test --console=plain 2>&1); then

@@ -5,10 +5,14 @@ import com.mobplayer.tv.models.RemoteIconType
 import com.mobplayer.tv.viewmodel.ConnectionEvent
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ServerRepositoryTest {
 
     private lateinit var serverRepository: ServerRepository
@@ -157,7 +161,7 @@ class ServerRepositoryTest {
     }
 
     @Test
-    fun `test postRemoteText emits text input to collectors`() = kotlinx.coroutines.test.runTest {
+    fun `test postRemoteText emits text input to collectors`() = runTest {
         val received = async(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
             serverRepository.remoteTextInput.first()
         }
@@ -175,23 +179,36 @@ class ServerRepositoryTest {
     }
 
     @Test
-    fun `test remote action hud event is dismissed automatically`() {
+    fun `test remote action hud event is dismissed automatically`() = runTest {
+        val repository = ServerRepository(backgroundScope) // dismiss timer runs on virtual time
         val action = RemoteActionEvent("PLAY", "Playing", iconType = RemoteIconType.PLAY)
-        serverRepository.postRemoteAction(action)
-        assertEquals(action, serverRepository.remoteActionEvent.value)
+        repository.postRemoteAction(action)
 
-        Thread.sleep(3_200)
-        assertNull(serverRepository.remoteActionEvent.value)
+        advanceTimeBy(REMOTE_ACTION_DISMISS_MS - 1)
+        runCurrent()
+        assertEquals(action, repository.remoteActionEvent.value)
+
+        advanceTimeBy(1)
+        runCurrent()
+        assertNull(repository.remoteActionEvent.value)
     }
 
     @Test
-    fun `test newer remote action is not dismissed by the older timer`() {
-        serverRepository.postRemoteAction(RemoteActionEvent("PLAY", "Playing", iconType = RemoteIconType.PLAY))
-        Thread.sleep(2_000)
+    fun `test newer remote action is not dismissed by the older timer`() = runTest {
+        val repository = ServerRepository(backgroundScope)
+        repository.postRemoteAction(RemoteActionEvent("PLAY", "Playing", iconType = RemoteIconType.PLAY))
+        advanceTimeBy(2_000)
         val newer = RemoteActionEvent("PAUSE", "Paused", iconType = RemoteIconType.PAUSE)
-        serverRepository.postRemoteAction(newer)
+        repository.postRemoteAction(newer)
 
-        Thread.sleep(1_200) // past the first event's 2.8s timer, inside the second's
-        assertEquals(newer, serverRepository.remoteActionEvent.value)
+        // 1.3s after the newer event: past the first event's timer, inside the second's
+        advanceTimeBy(1_300)
+        runCurrent()
+        assertEquals(newer, repository.remoteActionEvent.value)
+
+        // The newer event still gets its own full display time
+        advanceTimeBy(REMOTE_ACTION_DISMISS_MS - 1_300)
+        runCurrent()
+        assertNull(repository.remoteActionEvent.value)
     }
 }

@@ -19,7 +19,7 @@ Every feature, bug fix or behaviour change must come with tests in the same chan
 
 ## Enforcement (applies to every agent)
 
-- **Git pre-commit hook** (`.githooks/pre-commit`): blocks a commit with staged `.kt`/`.kts` changes if `./gradlew test` fails. Gradle installs it automatically (`installGitHooks`, runs before every build); to install by hand: `git config core.hooksPath .githooks`. Don't bypass it with `--no-verify`.
+- **Git pre-commit hook** (`.githooks/pre-commit`): blocks a commit with staged `.kt`/`.kts` changes (deletions included) if `./gradlew test` fails. It tests the staged version: unstaged edits are set aside for the run and restored afterwards (untracked files stay in place and are compiled too). Gradle installs it before every build (`installGitHooks`) unless `core.hooksPath` is already set to something else, in which case it warns; a fresh clone is covered from its first build, or install by hand with `git config core.hooksPath .githooks`. Don't bypass it with `--no-verify`.
 - **CI** (`.github/workflows/tests.yml`): runs the unit tests on every push and pull request.
 - **Claude Code** additionally runs the unit tests at the end of each turn via `.claude/hooks/run-tests.sh`.
 
