@@ -266,7 +266,7 @@ MobPlayer TV is built for a **trusted home LAN**. Keep these limits in mind:
 
 Every change must come with new or updated tests; see [`AGENTS.md`](AGENTS.md) for the rules that all contributors and coding agents follow. The unit tests run automatically: a git pre-commit hook in `.githooks/` (Gradle installs it on the first build) blocks commits of Kotlin changes while tests fail, and CI runs them on every push and pull request.
 
-There are 155 tests in 17 classes. Unit tests use [MockK](https://mockk.io) and `kotlinx-coroutines-test`; instrumentation tests run against a real ExoPlayer, a real Ktor server on a free port, and Compose UI.
+There are 188 tests in 19 classes. Unit tests use [MockK](https://mockk.io) and `kotlinx-coroutines-test`; instrumentation tests run against a real ExoPlayer, a real Ktor server on a free port, and Compose UI.
 
 | Module | Type | Test class | Tests |
 | :--- | :--- | :--- | :---: |
@@ -274,15 +274,17 @@ There are 155 tests in 17 classes. Unit tests use [MockK](https://mockk.io) and 
 | `app` | Unit | `VideoUploadManagerTest` | 15 |
 | `app` | Unit | `VideoMetadataTest` | 11 |
 | `app` | Unit | `BrowseFocusStateTest` | 2 |
+| `app` | Unit | `WatchHistoryStoreTest` | 12 |
 | `app` | Unit (mocks) | `TvMainViewModelTest` | 12 |
 | `app` | Unit (mocks) | `YouTubeFeedViewModelTest` | 11 |
-| `app` | Unit (mocks) | `YouTubePlayerViewModelTest` | 13 |
+| `app` | Unit (mocks) | `YouTubePlayerViewModelTest` | 24 |
 | `app` | Unit (mocks) | `YouTubeSearchViewModelTest` | 13 |
 | `app` | Instrumentation | `AuthManagerTest` | 4 |
-| `app` | Instrumentation | `MediaRepositoryTest` | 9 |
+| `app` | Instrumentation | `MediaRepositoryTest` | 10 |
 | `app` | Instrumentation | `KtorServerManagerTest` (REST + WebSocket pairing) | 23 |
 | `app` | Instrumentation (Compose) | `TvYouTubeCategoryBarTest` | 5 |
 | `app` | Instrumentation (Compose) | `TvPairingScreenTest` | 4 |
+| `app` | Instrumentation (Compose) | `TvYouTubePlayerScreenTest` | 9 |
 | `youtubecrawler` | Unit | `FormatUtilsTest` | 4 |
 | `youtubecrawler` | Unit | `UtilsTest` | 4 |
 | `youtubecrawler` | Unit | `YouTubeDataTest` | 3 |

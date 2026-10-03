@@ -414,7 +414,8 @@ class KtorServerManagerTest {
         client.send("TEXT_SUBMIT", "lofi hip hop")
 
         assertEquals(RemoteTextInput("lofi hip hop", submit = true), received.await())
-        assertEquals("SEARCH", serverRepository.remoteActionEvent.value?.action)
+        // The server posts the SEARCH action just after emitting the text, so it can lag the collector.
+        waitFor { serverRepository.remoteActionEvent.value?.action == "SEARCH" }
     }
 
     @Test
